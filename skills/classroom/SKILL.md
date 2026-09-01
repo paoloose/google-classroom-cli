@@ -1,6 +1,6 @@
 ---
 name: classroom
-description: "CLI for Google Classroom. View courses and course work directly from the terminal."
+description: "CLI for Google Classroom. Manage courses, coursework, grades, and submissions directly from the terminal."
 ---
 
 # classroom
@@ -9,26 +9,72 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
 
 ## Commands
 
-- `classroom auth login [--client-id=<id> --client-secret=<secret>]`
-  - Authenticate the CLI using an OAuth 2.0 Desktop flow. Opens your browser and runs a local server on port 3000 to capture the Google authorization code.
+### Core Auth
+- `classroom auth login [--teacher] [--client-id=<id> --client-secret=<secret>]`
+  - Authenticate the CLI using an OAuth 2.0 Desktop flow. Use `--teacher` to request write-access scopes for courses and grading.
   - Automatically attempts to load credentials from `credentials.json` if placed in the standard configuration directory (e.g., `~/.config/classroom-cli/credentials.json` on macOS/Linux).
-  - If no JSON file is found and flags are missing, prompts interactively. Non-interactive environments must provide these flags, environment variables, or a `credentials.json` file.
 - `classroom auth logout`
   - Clear the stored credentials.
+- `classroom schema`
+  - Outputs the expected JSON shape of CLI responses.
+
+### Courses & Rosters
 - `classroom course list`
   - Lists all active courses.
 - `classroom course get <id>`
   - Gets detailed information for a specific course ID.
-- `classroom schema`
-  - Outputs the expected JSON shape of CLI responses.
-- `classroom course stream <id>`
+- `classroom course create --name="<name>" [--section="<section>"]`
+  - Creates a new Google Classroom course (requires teacher auth).
+- `classroom course update <id> --status=<ACTIVE|ARCHIVED|DECLINED>`
+  - Updates the status of a course.
+- `classroom roster list <id> [--role=teacher]`
+  - Lists students (or teachers) in a course.
+- `classroom roster add <id> --email="<email>" [--role=teacher]`
+  - Invites a user to the course.
+- `classroom roster remove <id> --email="<email>"`
+  - Removes a user from the course.
+
+### Coursework & Content
+- `classroom stream list <id>`
   - Get announcements for a course.
-- `classroom course work <id>`
+- `classroom stream post <id> --text="<text>" [--scheduled="<ISO_DATE>"]`
+  - Post an announcement to the stream.
+- `classroom work list <id>`
   - Get coursework (assignments, quizzes, materials) for a course.
+- `classroom topic list <id>`
+  - List all topics in a course.
+- `classroom topic create <id> --name="<name>"`
+  - Create a new topic.
+- `classroom material list <id>`
+  - List all classwork materials.
+- `classroom material create <id> --title="<title>" [--topic=<topic_id>] [--link="<url>"]`
+  - Create a new classwork material with an optional link.
+
+### Grading & Submissions (Teacher)
+- `classroom submissions list <course_id> <work_id>`
+  - List all student submissions for a specific coursework.
+- `classroom submissions grade <course_id> <work_id> <student_id> --score=<number>`
+  - Set the draft and assigned grade for a student's submission.
+- `classroom submissions return <course_id> <work_id> <student_id>`
+  - Return a graded submission to the student.
+
+### Student Actions
+- `classroom submit <course_id> <work_id> --link="<url>"`
+  - Attach a URL to a pending assignment submission.
+- `classroom turn-in <course_id> <work_id>`
+  - Mark an assignment as turned in.
+- `classroom unsubmit <course_id> <work_id>`
+  - Unsubmit (reclaim) an assignment.
 - `classroom tasks pending`
   - List pending (not turned in) assignments across all active courses.
 - `classroom tasks due-soon`
   - List pending assignments due in the next 7 days across all active courses.
+
+### Guardians
+- `classroom guardian list <student_id>`
+  - List guardians for a student.
+- `classroom guardian invite <student_id> --email="<email>"`
+  - Send a guardian invitation.
 
 ## JSON Envelope
 

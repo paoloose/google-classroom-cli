@@ -64,12 +64,38 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 
 ## Commands
 
-- `classroom auth login` - Authenticate with Google
+### Core Auth
+- `classroom auth login [--teacher]` - Authenticate (use `--teacher` to get write/grade scopes)
 - `classroom auth logout` - Clear credentials
-- `classroom course list` - List Google Classroom courses
-- `classroom course get <id>` - Get detailed information for a specific course by ID
-- `classroom schema` - Show output JSON schema for agent tooling
 
-## Agent-First Design
+### Courses & Rosters
+- `classroom course list` - List active courses
+- `classroom course get <id>` - Get details of a course
+- `classroom course create --name="<name>"` - Create a new course
+- `classroom course update <id> --status=<STATUS>` - Update course status (ACTIVE, ARCHIVED)
+- `classroom roster list <id>` - List students in a course
+- `classroom roster add <id> --email="<email>"` - Add a student or teacher
+- `classroom roster remove <id> --email="<email>"` - Remove a student
+
+### Coursework & Content
+- `classroom stream list <id>` - List announcements
+- `classroom stream post <id> --text="<msg>"` - Post an announcement
+- `classroom work list <id>` - List coursework
+- `classroom topic list <id>` - List topics
+- `classroom topic create <id> --name="<name>"` - Create a topic
+- `classroom material list <id>` - List classwork materials
+- `classroom material create <id> --title="<title>"` - Create classwork material
+
+### Grading & Submissions (Teachers)
+- `classroom submissions list <course_id> <work_id>` - View all student submissions
+- `classroom submissions grade <course_id> <work_id> <student_id> --score=<num>` - Grade an assignment
+- `classroom submissions return <course_id> <work_id> <student_id>` - Return grades to student
+
+### Student Actions
+- `classroom submit <course_id> <work_id> --link="<url>"` - Attach work to an assignment
+- `classroom turn-in <course_id> <work_id>` - Turn in an assignment
+- `classroom unsubmit <course_id> <work_id>` - Unsubmit an assignment
+- `classroom tasks pending` - View all pending assignments across all courses
+- `classroom tasks due-soon` - View all assignments due in the next 7 days
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
