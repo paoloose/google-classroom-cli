@@ -76,8 +76,7 @@ async function handleCourseCreate(globals: GlobalFlags, argv: any) {
       requestBody: {
         name,
         section,
-        ownerId: 'me',
-        courseState: 'ACTIVE'
+        ownerId: 'me'
       }
     });
     const course = res.data;
