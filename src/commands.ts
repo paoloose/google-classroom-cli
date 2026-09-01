@@ -279,9 +279,17 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
   try {
     const res = await classroom.courses.courseWork.list({ courseId: id });
     const coursework = res.data.courseWork || [];
+    const now = new Date();
     emit({ coursework }, globals, (data) => {
       if (data.coursework.length === 0) { console.log('No coursework found.'); return; }
-      for (const cw of data.coursework) { console.log(`- [${cw.state}] ${cw.title} (Due: ${cw.dueDate ? `${cw.dueDate.year}-${cw.dueDate.month}-${cw.dueDate.day}` : 'No due date'})`); }
+      for (const cw of data.coursework) {
+        let dueStr = 'No due date';
+        if (cw.dueDate) {
+          const tDate = parseDueDate(cw);
+          dueStr = `Time left: ${formatTimeLeft(tDate, now)}`;
+        }
+        console.log(`- [${cw.state}] ${cw.title} (${dueStr})`);
+      }
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
@@ -352,6 +360,12 @@ function formatTimeLeft(tDate: Date, now: Date) {
   }
 }
 
+function parseDueDate(cw: any) {
+  const d = cw.dueDate;
+  const t = cw.dueTime || { hours: 23, minutes: 59, seconds: 59 };
+  return new Date(Date.UTC(d.year, (d.month || 1) - 1, d.day || 1, t.hours || 0, t.minutes || 0, t.seconds || 0));
+}
+
 export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
   const classroom = await getClient();
   try {
@@ -359,13 +373,6 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
     const now = new Date();
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    // Parse Google's UTC dates properly
-    const parseDueDate = (cw: any) => {
-      const d = cw.dueDate;
-      const t = cw.dueTime || { hours: 23, minutes: 59, seconds: 59 };
-      return new Date(Date.UTC(d.year, (d.month || 1) - 1, d.day || 1, t.hours || 0, t.minutes || 0, t.seconds || 0));
-    };
-
     const dueSoonTasks = pendingTasks.filter(t => {
       if (!t.courseWork.dueDate) return false;
       const tDate = parseDueDate(t.courseWork);
