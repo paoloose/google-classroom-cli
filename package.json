@@ -1,0 +1,28 @@
+{
+  "name": "google-classroom-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "registries": {
+    "@cligentic": "https://cligentic.railly.dev/r/{name}.json"
+  },
+  "dependencies": {
+    "googleapis": "^178.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "bin": {
+    "classroom": "src/cli.ts"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "cligentic": {
+      "source": "Railly/cligentic",
+      "sourceType": "github",
+      "skillPath": "skills/cligentic/SKILL.md",
+      "computedHash": "8f447a71aa8f46071c1d3dccc910e08e12977bcb78ea0af663930565a32acedd"
+    },
+    "supply-chain-audit": {
+      "source": "crafter-station/skills",
+      "sourceType": "github",
+      "skillPath": "skills/supply-chain-audit/SKILL.md",
+      "computedHash": "a14003e4ea5e41f41e147a7b41474e8ab6c07b68cb9dd3912324758ba0d3ef6b"
+    }
+  }
+}
