@@ -11,7 +11,7 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
 
 - `classroom auth login [--client-id=<id> --client-secret=<secret>]`
   - Authenticate the CLI using an OAuth 2.0 Desktop flow. Opens your browser and runs a local server on port 3000 to capture the Google authorization code.
-  - Automatically attempts to load credentials from `credentials.json` if placed in the standard configuration directory (e.g., `~/Library/Application Support/classroom-cli/credentials.json` on macOS).
+  - Automatically attempts to load credentials from `credentials.json` if placed in the standard configuration directory (e.g., `~/.config/classroom-cli/credentials.json` on macOS/Linux).
   - If no JSON file is found and flags are missing, prompts interactively. Non-interactive environments must provide these flags, environment variables, or a `credentials.json` file.
 - `classroom auth logout`
   - Clear the stored credentials.

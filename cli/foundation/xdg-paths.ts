@@ -65,19 +65,6 @@ export function getAppPaths(appName: string): AppPaths {
   const os = platform();
   const home = homedir();
 
-  if (os === "darwin") {
-    const appSupport = join(home, "Library", "Application Support", appName);
-    return {
-      config: appSupport,
-      state: appSupport,
-      cache: join(home, "Library", "Caches", appName),
-      home: appSupport,
-      audit: join(appSupport, "audit"),
-      sessions: join(appSupport, "sessions"),
-      tmp: join(appSupport, "tmp"),
-    };
-  }
-
   if (os === "win32") {
     const appData = process.env.APPDATA || join(home, "AppData", "Roaming");
     const localAppData = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
@@ -93,7 +80,7 @@ export function getAppPaths(appName: string): AppPaths {
     };
   }
 
-  // Linux / WSL / other Unix: XDG
+  // macOS / Linux / WSL / other Unix: XDG
   const xdgConfig = process.env.XDG_CONFIG_HOME || join(home, ".config");
   const xdgState = process.env.XDG_STATE_HOME || join(home, ".local", "state");
   const xdgCache = process.env.XDG_CACHE_HOME || join(home, ".cache");
