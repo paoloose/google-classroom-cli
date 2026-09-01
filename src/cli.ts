@@ -38,7 +38,8 @@ async function main() {
     console.error('  topic list <id>       List topics');
     console.error('  topic create <id>     Create a topic (requires --name)');
     console.error('  material list <id>    List classwork materials');
-    console.error('  material create <id>  Create material (requires --title, optional --link, --topic)');
+    console.error('  material create <id>  Create material (requires --title, supports --file/--link)');
+    console.error('  drive download <id>   Download a Drive file (optional --dest)');
     console.error('Grading & Submissions (Teachers):');
     console.error('  submissions list <course_id> <work_id>');
     console.error('  submissions grade <course_id> <work_id> <student_id> (requires --score)');
@@ -78,6 +79,16 @@ async function main() {
     if (noun === 'turn-in') return await handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
     if (noun === 'unsubmit') return await handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});
     
+    if (noun === 'drive' && verb === 'download') {
+      const fileId = argv._[2];
+      const dest = argv['dest'] || 'downloaded_file';
+      if (!fileId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'File ID is required' });
+      const { downloadFromDrive } = await import('./commands/drive.js');
+      await downloadFromDrive(fileId, dest, globals);
+      emit({ success: true, fileId, dest }, globals, () => console.log(`Downloaded ${fileId} to ${dest}`));
+      return;
+    }
+
     if (noun === 'tasks') {
       if (verb === 'pending') return await handleTasksPending(globals, argv);
       if (verb === 'due-soon') return await handleTasksDueSoon(globals, argv);

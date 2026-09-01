@@ -55,3 +55,15 @@ export async function uploadToDrive(filePath: string, globals: any): Promise<str
 
   return res.data.id;
 }
+
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+
+export async function downloadFromDrive(fileId: string, destPath: string, globals: any): Promise<void> {
+  const drive = await getDriveClient();
+  const res = await drive.files.get(
+    { fileId, alt: 'media' },
+    { responseType: 'stream' }
+  );
+  await pipeline(res.data, createWriteStream(destPath));
+}

@@ -86,6 +86,7 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom topic create <id> --name="<name>"` - Create a new topic
 - `classroom material list <id>` - List classwork materials
 - `classroom material create <id> --title="<title>" [--file="<path>"] [--link="<url>"]` - Create material (supports multiple --file and --link)
+- `classroom drive download <file_id> [--dest="<path>"]` - Download an attached Google Drive file
 
 ### Grading & Submissions (Teachers)
 - `classroom submissions list <course_id> <work_id>` - View all student submissions

@@ -31,7 +31,8 @@ const ALL_SCOPES = [
   'https://www.googleapis.com/auth/classroom.topics',
   'https://www.googleapis.com/auth/classroom.guardianlinks.students',
   'https://www.googleapis.com/auth/classroom.push-notifications',
-  'https://www.googleapis.com/auth/drive.file'
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.readonly'
 ];
 
 function openUrl(url: string) {

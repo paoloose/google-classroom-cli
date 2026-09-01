@@ -47,6 +47,8 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
   - List all classwork materials.
 - `classroom material create <course_id> --title="<title>" [--topic=<topic_id>] [--link="<url>"] [--file="<local_path>"]`
   - Create new material. Can specify multiple `--link` or `--file` flags. Local files are automatically uploaded to Google Drive.
+- `classroom drive download <file_id> [--dest="<path>"]`
+  - Download a Google Drive file attached to coursework to a local path.
 - `classroom stream list <course_id>`
   - List all announcements on the course stream.
 - `classroom stream post <course_id> --text="<content>"`
