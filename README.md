@@ -41,11 +41,17 @@ Because this CLI interacts with Google Classroom, you need to provide your own G
    - Give it a name (e.g., "Classroom CLI") and click **Create**.
 
 7. **Log In:**
-   Run the login command and paste the Client ID and Secret when prompted:
+   Run the login command:
    ```bash
    classroom auth login
    ```
-   *(Note: You can also pass these via `--client-id` and `--client-secret` flags, or set the `CLASSROOM_CLIENT_ID` and `CLASSROOM_CLIENT_SECRET` environment variables).*
+   If you have downloaded the OAuth credentials JSON file from Google Cloud (usually named `client_secret_....json`), you can rename it to `credentials.json` and place it in the app's standard configuration directory. The CLI will automatically detect it!
+
+   - **macOS:** `~/Library/Application Support/classroom-cli/credentials.json`
+   - **Windows:** `%APPDATA%\classroom-cli\credentials.json`
+   - **Linux:** `~/.config/classroom-cli/credentials.json`
+   
+   *(Note: You can also just paste the Client ID and Secret when prompted interactively, pass them via `--client-id` and `--client-secret` flags, or set the `CLASSROOM_CLIENT_ID` and `CLASSROOM_CLIENT_SECRET` environment variables).*
 
 ### Can I use an API key for authentication?
 
