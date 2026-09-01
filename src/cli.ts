@@ -16,7 +16,7 @@ async function main() {
   const argv = parseArgv(process.argv.slice(2));
   const globals = parseGlobalFlags(argv);
   
-  if (argv.help || argv.h) {
+  if (argv.help || argv.h || argv._.length === 0) {
     if (!globals.json) printBanner({ name: 'Classroom', tagline: 'Classroom CLI' });
     console.error('Usage: classroom <noun> <verb> [options]');
     console.error('Core:');
