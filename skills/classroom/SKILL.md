@@ -21,6 +21,14 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
   - Gets detailed information for a specific course ID.
 - `classroom schema`
   - Outputs the expected JSON shape of CLI responses.
+- `classroom course stream <id>`
+  - Get announcements for a course.
+- `classroom course work <id>`
+  - Get coursework (assignments, quizzes, materials) for a course.
+- `classroom tasks pending`
+  - List pending (not turned in) assignments across all active courses.
+- `classroom tasks due-soon`
+  - List pending assignments due in the next 7 days across all active courses.
 
 ## JSON Envelope
 

@@ -12,7 +12,11 @@ import { promptSecret } from '../cli/agent/prompt-secret.js';
 import { detectMode, shouldColor } from '../cli/platform/detect.js';
 import { getAppPaths, ensureHome } from '../cli/foundation/xdg-paths.js';
 
-const SCOPES = ['https://www.googleapis.com/auth/classroom.courses.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/classroom.courses.readonly',
+  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  'https://www.googleapis.com/auth/classroom.announcements.readonly'
+];
 
 const paths = getAppPaths('classroom-cli');
 
@@ -21,6 +25,7 @@ type SessionData = {
   refresh_token?: string;
   client_id?: string;
   client_secret?: string;
+  createdAt: string;
 };
 
 async function getClient() {
@@ -37,7 +42,7 @@ async function getClient() {
   const oauth2Client = new google.auth.OAuth2(session.client_id, session.client_secret);
   oauth2Client.setCredentials({ 
     access_token: session.access_token,
-    refresh_token: session.refresh_token 
+    refresh_token: session.refresh_token || null 
   });
   
   // Optional: Listen for tokens event to save new tokens if they refresh
@@ -88,10 +93,11 @@ async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals
             const { tokens } = await oauth2Client.getToken(code);
             
             if (tokens.access_token) {
-              resolve({
-                access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token || undefined
-              });
+              const resObj: { access_token: string, refresh_token?: string } = {
+                access_token: tokens.access_token
+              };
+              if (tokens.refresh_token) resObj.refresh_token = tokens.refresh_token;
+              resolve(resObj);
             } else {
               reject(new Error('No access token received.'));
             }
@@ -248,4 +254,113 @@ export async function handleCourseGet(globals: GlobalFlags, argv: any) {
       human: error.message || 'Failed to get course'
     }, error);
   }
+}
+
+export async function handleCourseStream(globals: GlobalFlags, argv: any) {
+  const id = argv._[2];
+  if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course stream <id>' });
+  note(`Fetching announcements for course ${id}...`, globals);
+  const classroom = await getClient();
+  try {
+    const res = await classroom.courses.announcements.list({ courseId: id });
+    const announcements = res.data.announcements || [];
+    emit({ announcements }, globals, (data) => {
+      if (data.announcements.length === 0) { console.log('No announcements found.'); return; }
+      for (const a of data.announcements) { console.log(`- ${a.text} (Updated: ${a.updateTime})`); }
+    });
+  } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+}
+
+export async function handleCourseWork(globals: GlobalFlags, argv: any) {
+  const id = argv._[2];
+  if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course work <id>' });
+  note(`Fetching coursework for course ${id}...`, globals);
+  const classroom = await getClient();
+  try {
+    const res = await classroom.courses.courseWork.list({ courseId: id });
+    const coursework = res.data.courseWork || [];
+    emit({ coursework }, globals, (data) => {
+      if (data.coursework.length === 0) { console.log('No coursework found.'); return; }
+      for (const cw of data.coursework) { console.log(`- [${cw.state}] ${cw.title} (Due: ${cw.dueDate ? `${cw.dueDate.year}-${cw.dueDate.month}-${cw.dueDate.day}` : 'No due date'})`); }
+    });
+  } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+}
+
+async function getPendingTasks(classroom: any, globals: any) {
+  note('Fetching active courses...', globals);
+  const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
+  const courses = coursesRes.data.courses || [];
+  const pendingTasks: {course: string, courseId: string, submission: any, courseWork: any}[] = [];
+  
+  for (const course of courses) {
+    note(`Checking pending tasks for ${course.name}...`, globals);
+    try {
+      const [submissionsRes, cwRes] = await Promise.all([
+        classroom.courses.courseWork.studentSubmissions.list({ courseId: course.id, courseWorkId: '-', userId: 'me' }),
+        classroom.courses.courseWork.list({ courseId: course.id })
+      ]);
+      const submissions = submissionsRes.data.studentSubmissions || [];
+      const courseWorkList = cwRes.data.courseWork || [];
+      const cwMap = new Map(courseWorkList.map((cw: any) => [cw.id, cw]));
+
+      for (const sub of submissions) {
+        if (sub.state === 'NEW' || sub.state === 'CREATED' || sub.state === 'RECLAIMED_BY_STUDENT') {
+          const cw = cwMap.get(sub.courseWorkId);
+          if (cw) {
+            pendingTasks.push({ course: course.name, courseId: course.id, submission: sub, courseWork: cw });
+          }
+        }
+      }
+    } catch (e: any) {
+      // Ignore if user isn't a student in this course or has no access
+    }
+  }
+  return pendingTasks;
+}
+
+export async function handleTasksPending(globals: GlobalFlags, argv: any) {
+  const classroom = await getClient();
+  try {
+    const pendingTasks = await getPendingTasks(classroom, globals);
+    emit({ pendingTasks }, globals, (data) => {
+      if (data.pendingTasks.length === 0) { console.log('No pending tasks!'); return; }
+      console.log('Pending Tasks:');
+      for (const t of data.pendingTasks) {
+        console.log(`- [${t.course}] ${t.courseWork.title} (Link: ${t.courseWork.alternateLink})`);
+      }
+    });
+  } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+}
+
+export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
+  const classroom = await getClient();
+  try {
+    const pendingTasks = await getPendingTasks(classroom, globals);
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    const dueSoonTasks = pendingTasks.filter(t => {
+      if (!t.courseWork.dueDate) return false;
+      const d = t.courseWork.dueDate;
+      const tDate = new Date(d.year, (d.month || 1) - 1, d.day || 1);
+      return tDate >= now && tDate <= nextWeek;
+    });
+    
+    dueSoonTasks.sort((a, b) => {
+      const ad = a.courseWork.dueDate;
+      const bd = b.courseWork.dueDate;
+      const aDate = new Date(ad.year, (ad.month || 1) - 1, ad.day || 1).getTime();
+      const bDate = new Date(bd.year, (bd.month || 1) - 1, bd.day || 1).getTime();
+      return aDate - bDate;
+    });
+
+    emit({ dueSoonTasks }, globals, (data) => {
+      if (data.dueSoonTasks.length === 0) { console.log('No tasks due in the next 7 days!'); return; }
+      console.log('Tasks Due Soon:');
+      for (const t of data.dueSoonTasks) {
+        const d = t.courseWork.dueDate;
+        console.log(`- [${t.course}] ${t.courseWork.title} (Due: ${d.year}-${d.month}-${d.day})`);
+      }
+    });
+  } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }

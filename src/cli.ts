@@ -4,7 +4,7 @@ import { parseGlobalFlags } from '../cli/foundation/global-flags.js';
 import { AppError } from '../cli/foundation/error-map.js';
 import { showBanner } from '../cli/foundation/banner.js';
 import { emit, reportError } from '../cli/agent/json-mode.js';
-import { handleAuth, handleCourseList, handleCourseGet } from './commands.js';
+import { handleAuth, handleCourseList, handleCourseGet, handleCourseStream, handleCourseWork, handleTasksPending, handleTasksDueSoon } from './commands.js';
 import { printBanner } from '../cli/foundation/banner.js';
 
 async function main() {
@@ -19,6 +19,10 @@ async function main() {
     console.error('  auth logout         Clear credentials');
     console.error('  course list         List Google Classroom courses');
     console.error('  course get <id>     Get a course by ID');
+    console.error('  course stream <id>  Get announcements for a course');
+    console.error('  course work <id>    Get coursework for a course');
+    console.error('  tasks pending       List pending assignments across all courses');
+    console.error('  tasks due-soon      List assignments due in the next 7 days');
     console.error('  schema              Show output JSON schema');
     process.exit(0);
   }
@@ -42,6 +46,21 @@ async function main() {
         await handleCourseList(globals, argv);
       } else if (verb === 'get') {
         await handleCourseGet(globals, argv);
+      } else if (verb === 'stream') {
+        await handleCourseStream(globals, argv);
+      } else if (verb === 'work') {
+        await handleCourseWork(globals, argv);
+      } else {
+        throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown verb: ${verb}` });
+      }
+      return;
+    }
+    
+    if (noun === 'tasks') {
+      if (verb === 'pending') {
+        await handleTasksPending(globals, argv);
+      } else if (verb === 'due-soon') {
+        await handleTasksDueSoon(globals, argv);
       } else {
         throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown verb: ${verb}` });
       }
