@@ -15,7 +15,7 @@ async function main() {
     if (!globals.json) printBanner({ name: 'Classroom', tagline: 'Classroom CLI' });
     console.error('Usage: classroom <noun> <verb> [options]');
     console.error('Commands:');
-    console.error('  auth login          Authenticate with Google');
+    console.error('  auth login          Authenticate with Google (requires --client-id and --client-secret)');
     console.error('  auth logout         Clear credentials');
     console.error('  course list         List Google Classroom courses');
     console.error('  course get <id>     Get a course by ID');
