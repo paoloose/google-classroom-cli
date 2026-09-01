@@ -91,8 +91,12 @@ Errors follow the AppError format:
   "name": "ErrorName",
   "hint": "Optional hint on how to fix"
 }
-```
+## API Limitations & Quirks
+Agents should be aware of the following Google API restrictions when operating this CLI:
 
+1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`)**: Google Classroom blocks API clients from modifying submissions (turning in, attaching files) if the assignment was created manually by a teacher in the Web UI. The CLI can only submit/turn-in assignments that the CLI created. Agents should fallback to using the Web UI (or instruct the user) for manual assignment submissions.
+2. **Google Drive Scopes**: The Classroom API relies on Google Drive for all file attachments. Agents attempting to use `--file` uploads or `drive download` will encounter 403 errors if the user has not enabled the "Google Drive API" in their Google Cloud Console.
+3. **Course Creation (`@CourseStateDenied`)**: Courses created via the CLI may default to a `PROVISIONED` state based on domain policy. Agents cannot archive a `PROVISIONED` course via the API; it must be activated in the Web UI first.
 ## Global Flags
 
 - `--json`: Force JSON output mode (implied when piped or not in TTY).

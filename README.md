@@ -101,3 +101,13 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom tasks due-soon` - View all assignments due in the next 7 days
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
+
+## ⚠️ Known API Limitations & Quirks
+During the development and dogfooding of this CLI, we uncovered several strict security boundaries enforced by the Google Classroom API:
+
+1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`):**
+   Google Classroom strictly prohibits third-party apps from modifying student submissions (attaching files, turning in, or unsubmitting) if the original assignment (`courseWork`) was created manually by a teacher in the Google Classroom Web UI, or by a different Google Cloud project. Attempting to do so will result in a `@ProjectPermissionDenied` error. Student write-actions via this CLI only work on assignments that were originally created via the CLI.
+2. **Google Drive API Requirement:**
+   While the Classroom API handles metadata, all physical file attachments live in Google Drive. To use `--file` uploads in materials/submissions or the `classroom drive download` command, you **must** manually enable the "Google Drive API" in your Google Cloud Console project.
+3. **Course Creation States (`@CourseStateDenied`):**
+   Depending on your Google Workspace domain policy (or if you are a standard `@gmail.com` user), creating a new course via the CLI may force the course into a `PROVISIONED` state. The API will reject attempts to transition a `PROVISIONED` course directly to `ARCHIVED`. You must accept/activate the course in the Classroom Web UI first.
