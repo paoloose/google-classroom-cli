@@ -332,6 +332,26 @@ export async function handleTasksPending(globals: GlobalFlags, argv: any) {
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
 
+function formatTimeLeft(tDate: Date, now: Date) {
+  const diffMs = tDate.getTime() - now.getTime();
+  if (diffMs <= 0) return 'Overdue';
+  
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSeconds / (3600 * 24));
+  const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  if (totalSeconds < 69 * 60) {
+    const m = Math.floor(totalSeconds / 60);
+    return `${m}m${seconds}s`;
+  } else if (totalSeconds >= 24 * 3600) {
+    return `${days}d${hours}h`;
+  } else {
+    return `${hours}h${minutes}m`;
+  }
+}
+
 export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
   const classroom = await getClient();
   try {
@@ -339,27 +359,30 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
     const now = new Date();
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     
+    // Parse Google's UTC dates properly
+    const parseDueDate = (cw: any) => {
+      const d = cw.dueDate;
+      const t = cw.dueTime || { hours: 23, minutes: 59, seconds: 59 };
+      return new Date(Date.UTC(d.year, (d.month || 1) - 1, d.day || 1, t.hours || 0, t.minutes || 0, t.seconds || 0));
+    };
+
     const dueSoonTasks = pendingTasks.filter(t => {
       if (!t.courseWork.dueDate) return false;
-      const d = t.courseWork.dueDate;
-      const tDate = new Date(d.year, (d.month || 1) - 1, d.day || 1);
+      const tDate = parseDueDate(t.courseWork);
       return tDate >= now && tDate <= nextWeek;
     });
     
     dueSoonTasks.sort((a, b) => {
-      const ad = a.courseWork.dueDate;
-      const bd = b.courseWork.dueDate;
-      const aDate = new Date(ad.year, (ad.month || 1) - 1, ad.day || 1).getTime();
-      const bDate = new Date(bd.year, (bd.month || 1) - 1, bd.day || 1).getTime();
-      return aDate - bDate;
+      return parseDueDate(a.courseWork).getTime() - parseDueDate(b.courseWork).getTime();
     });
 
     emit({ dueSoonTasks }, globals, (data) => {
       if (data.dueSoonTasks.length === 0) { console.log('No tasks due in the next 7 days!'); return; }
       console.log('Tasks Due Soon:');
       for (const t of data.dueSoonTasks) {
-        const d = t.courseWork.dueDate;
-        console.log(`- [${t.course}] ${t.courseWork.title} (Due: ${d.year}-${d.month}-${d.day})`);
+        const tDate = parseDueDate(t.courseWork);
+        const timeLeft = formatTimeLeft(tDate, now);
+        console.log(`- [${t.course}] ${t.courseWork.title} (Time left: ${timeLeft})`);
       }
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
