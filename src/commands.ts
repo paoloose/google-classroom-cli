@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { URL } from 'node:url';
 import { AppError } from '../cli/foundation/error-map.js';
 import { emit, note } from '../cli/agent/json-mode.js';
-import { GlobalFlags } from '../cli/foundation/global-flags.js';
+import { type GlobalFlags } from '../cli/foundation/global-flags.js';
 import { loadSession, saveSession, clearSession } from '../cli/foundation/session.js';
 import { promptSecret } from '../cli/agent/prompt-secret.js';
 import { detectMode, shouldColor } from '../cli/platform/detect.js';
@@ -40,11 +40,11 @@ async function getClient() {
   }
 
   const oauth2Client = new google.auth.OAuth2(session.client_id, session.client_secret);
-  oauth2Client.setCredentials({ 
+  oauth2Client.setCredentials({
     access_token: session.access_token,
-    refresh_token: session.refresh_token || null 
+    refresh_token: session.refresh_token || null
   });
-  
+
   // Optional: Listen for tokens event to save new tokens if they refresh
   oauth2Client.on('tokens', (tokens) => {
     if (tokens.access_token) {
@@ -88,10 +88,10 @@ async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals
           if (code) {
             res.end('Authentication successful! You can close this tab.');
             server.close();
-            
+
             note('Exchanging authorization code for tokens...', globals);
             const { tokens } = await oauth2Client.getToken(code);
-            
+
             if (tokens.access_token) {
               const resObj: { access_token: string, refresh_token?: string } = {
                 access_token: tokens.access_token
@@ -122,7 +122,7 @@ async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals
         note(`Please open this URL in your browser: ${authUrl}`, globals);
       }
     });
-    
+
     server.on('error', (err) => {
       reject(err);
     });
@@ -134,7 +134,7 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
   if (verb === 'login') {
     let clientId = argv['client-id'] || process.env.CLASSROOM_CLIENT_ID;
     let clientSecret = argv['client-secret'] || process.env.CLASSROOM_CLIENT_SECRET;
-    
+
     const credsPath = join(paths.config, 'credentials.json');
     if (!clientId || !clientSecret) {
       if (existsSync(credsPath)) {
@@ -151,7 +151,7 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
         }
       }
     }
-    
+
     if (!clientId || !clientSecret) {
       if (globals.noInput || detectMode(globals) === 'json') {
         throw new AppError('MISSING_OAUTH_CREDS', {
@@ -160,14 +160,14 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
           hint: 'Pass --client-id and --client-secret or set CLASSROOM_CLIENT_ID and CLASSROOM_CLIENT_SECRET'
         });
       }
-      
+
       console.log('Google Classroom OAuth 2.0 Setup');
       console.log('You need a Desktop OAuth Client ID from Google Cloud Console.');
-      
+
       const inputId = await promptSecret('Client ID: ');
       if (!inputId) throw new AppError('NO_INPUT', { name: 'NoInput', human: 'Client ID required.' });
       clientId = inputId;
-      
+
       const inputSecret = await promptSecret('Client Secret: ');
       if (!inputSecret) throw new AppError('NO_INPUT', { name: 'NoInput', human: 'Client Secret required.' });
       clientSecret = inputSecret;
@@ -175,12 +175,12 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
 
     try {
       const tokens = await runLocalOAuthFlow(clientId, clientSecret, globals);
-      await saveSession(paths.sessions, { 
+      await saveSession(paths.sessions, {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         client_id: clientId,
         client_secret: clientSecret,
-        createdAt: new Date().toISOString() 
+        createdAt: new Date().toISOString()
       });
       emit({ loggedIn: true }, globals, () => console.log('\nSuccessfully logged in to Google Classroom.'));
     } catch (e: any) {
@@ -203,13 +203,13 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
 export async function handleCourseList(globals: GlobalFlags, argv: any) {
   note('Fetching courses...', globals);
   const classroom = await getClient();
-  
+
   try {
     const res = await classroom.courses.list({
       courseStates: ['ACTIVE'],
     });
     const courses = res.data.courses || [];
-    
+
     emit({ courses }, globals, (data) => {
       if (data.courses.length === 0) {
         console.log('No courses found.');
@@ -237,11 +237,11 @@ export async function handleCourseGet(globals: GlobalFlags, argv: any) {
 
   note(`Fetching course ${id}...`, globals);
   const classroom = await getClient();
-  
+
   try {
     const res = await classroom.courses.get({ id });
     const course = res.data;
-    
+
     emit({ course }, globals, (data) => {
       console.log(`Course: ${data.course.name}`);
       console.log(`ID: ${data.course.id}`);
@@ -286,7 +286,9 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         let dueStr = 'No due date';
         if (cw.dueDate) {
           const tDate = parseDueDate(cw);
-          dueStr = `Time left: ${formatTimeLeft(tDate, now)}`;
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+          dueStr = `Due: ${localDateStr} | left: ${formatTimeLeft(tDate, now)}`;
         }
         console.log(`- [${cw.state}] ${cw.title} (${dueStr})`);
       }
@@ -299,7 +301,7 @@ async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
   const courses = coursesRes.data.courses || [];
   const pendingTasks: {course: string, courseId: string, submission: any, courseWork: any}[] = [];
-  
+
   for (const course of courses) {
     note(`Checking pending tasks for ${course.name}...`, globals);
     try {
@@ -343,13 +345,13 @@ export async function handleTasksPending(globals: GlobalFlags, argv: any) {
 function formatTimeLeft(tDate: Date, now: Date) {
   const diffMs = tDate.getTime() - now.getTime();
   if (diffMs <= 0) return 'Overdue';
-  
+
   const totalSeconds = Math.floor(diffMs / 1000);
   const days = Math.floor(totalSeconds / (3600 * 24));
   const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  
+
   if (totalSeconds < 69 * 60) {
     const m = Math.floor(totalSeconds / 60);
     return `${m}m${seconds}s`;
@@ -372,13 +374,13 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
     const pendingTasks = await getPendingTasks(classroom, globals);
     const now = new Date();
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
+
     const dueSoonTasks = pendingTasks.filter(t => {
       if (!t.courseWork.dueDate) return false;
       const tDate = parseDueDate(t.courseWork);
       return tDate >= now && tDate <= nextWeek;
     });
-    
+
     dueSoonTasks.sort((a, b) => {
       return parseDueDate(a.courseWork).getTime() - parseDueDate(b.courseWork).getTime();
     });
@@ -389,7 +391,9 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
       for (const t of data.dueSoonTasks) {
         const tDate = parseDueDate(t.courseWork);
         const timeLeft = formatTimeLeft(tDate, now);
-        console.log(`- [${t.course}] ${t.courseWork.title} (Time left: ${timeLeft})`);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+        console.log(`- [${t.course}] ${t.courseWork.title} (Due: ${localDateStr} | left: ${timeLeft})`);
       }
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
