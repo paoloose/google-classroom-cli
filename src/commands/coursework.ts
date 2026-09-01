@@ -124,6 +124,17 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             dueStr = `Due: ${localDateStr} | Time left: ${formatTimeLeft(tDate, now)}`;
           }
           console.log(`- [${cw.state}] ${cw.title} (${dueStr})`);
+          if (cw.materials) {
+            for (const att of cw.materials) {
+              if (att.driveFile?.driveFile) {
+                console.log(`    📄 File: ${att.driveFile.driveFile.title} (ID: ${att.driveFile.driveFile.id})`);
+              } else if (att.link) {
+                console.log(`    🔗 Link: ${att.link.title || att.link.url}`);
+              } else if (att.youtubeVideo) {
+                console.log(`    ▶️ YouTube: ${att.youtubeVideo.title} (${att.youtubeVideo.alternateLink})`);
+              }
+            }
+          }
         }
       });
     } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
@@ -175,7 +186,20 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     const materials = res.data.courseWorkMaterial || [];
     emit({ materials }, globals, (data) => {
       if (data.materials.length === 0) { console.log('No materials found.'); return; }
-      for (const m of data.materials) console.log(`- [${m.state}] ${m.title} (${m.id})`);
+      for (const m of data.materials) {
+        console.log(`- [${m.state}] ${m.title} (${m.id})`);
+        if (m.materials) {
+          for (const att of m.materials) {
+            if (att.driveFile?.driveFile) {
+              console.log(`    📄 File: ${att.driveFile.driveFile.title} (ID: ${att.driveFile.driveFile.id})`);
+            } else if (att.link) {
+              console.log(`    🔗 Link: ${att.link.title || att.link.url}`);
+            } else if (att.youtubeVideo) {
+              console.log(`    ▶️ YouTube: ${att.youtubeVideo.title} (${att.youtubeVideo.alternateLink})`);
+            }
+          }
+        }
+      }
     });
   } else if (verb === 'create') {
     const title = argv['title'];
