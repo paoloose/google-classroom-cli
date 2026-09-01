@@ -13,7 +13,7 @@ export type SessionData = {
   createdAt: string;
 };
 
-export async function getClient() {
+async function getOAuthClient() {
   ensureHome(paths);
   const session = await loadSession<SessionData>(paths.sessions);
   if (!session?.access_token) {
@@ -41,5 +41,15 @@ export async function getClient() {
     }
   });
 
-  return google.classroom({ version: 'v1', auth: oauth2Client });
+  return oauth2Client;
+}
+
+export async function getClient() {
+  const auth = await getOAuthClient();
+  return google.classroom({ version: 'v1', auth });
+}
+
+export async function getDriveClient() {
+  const auth = await getOAuthClient();
+  return google.drive({ version: 'v3', auth });
 }

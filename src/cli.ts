@@ -34,6 +34,7 @@ async function main() {
     console.error('  stream list <id>      List announcements');
     console.error('  stream post <id>      Post announcement (requires --text)');
     console.error('  work list <id>        List coursework');
+    console.error('  work create <id>      Create an assignment (requires --title)');
     console.error('  topic list <id>       List topics');
     console.error('  topic create <id>     Create a topic (requires --name)');
     console.error('  material list <id>    List classwork materials');
@@ -72,7 +73,7 @@ async function main() {
     if (noun === 'guardian') return await handleGuardians(verb, globals, argv);
     
     // Some are slightly renamed/grouped for CLI UX
-    if (noun === 'work' && verb === 'list') return await handleCourseWork(globals, { ...argv, _: ['course', 'work', argv._[2]] });
+    if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['course', argv._[1], argv._[2]] });
     if (noun === 'submit') return await handleStudentAction('submit', globals, { ...argv, _: ['student', 'submit', argv._[1], argv._[2]]});
     if (noun === 'turn-in') return await handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
     if (noun === 'unsubmit') return await handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});

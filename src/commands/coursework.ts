@@ -102,28 +102,45 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
 }
 
 export async function handleCourseWork(globals: GlobalFlags, argv: any) {
+  const verb = argv._[1];
   const id = argv._[2];
-  if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course work <id>' });
-  note(`Fetching coursework for course ${id}...`, globals);
+  if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   const classroom = await getClient();
-  try {
-    const res = await classroom.courses.courseWork.list({ courseId: id });
-    const coursework = res.data.courseWork || [];
-    const now = new Date();
-    emit({ coursework }, globals, (data) => {
-      if (data.coursework.length === 0) { console.log('No coursework found.'); return; }
-      for (const cw of data.coursework) {
-        let dueStr = 'No due date';
-        if (cw.dueDate) {
-          const tDate = parseDueDate(cw);
-          const pad = (n: number) => n.toString().padStart(2, '0');
-          const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
-          dueStr = `Due: ${localDateStr} | Time left: ${formatTimeLeft(tDate, now)}`;
+  
+  if (verb === 'list') {
+    note(`Fetching coursework for course ${id}...`, globals);
+    try {
+      const res = await classroom.courses.courseWork.list({ courseId: id });
+      const coursework = res.data.courseWork || [];
+      const now = new Date();
+      emit({ coursework }, globals, (data) => {
+        if (data.coursework.length === 0) { console.log('No coursework found.'); return; }
+        for (const cw of data.coursework) {
+          let dueStr = 'No due date';
+          if (cw.dueDate) {
+            const tDate = parseDueDate(cw);
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+            dueStr = `Due: ${localDateStr} | Time left: ${formatTimeLeft(tDate, now)}`;
+          }
+          console.log(`- [${cw.state}] ${cw.title} (${dueStr})`);
         }
-        console.log(`- [${cw.state}] ${cw.title} (${dueStr})`);
-      }
-    });
-  } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+      });
+    } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+  } else if (verb === 'create') {
+    const title = argv['title'];
+    if (!title) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--title is required' });
+    
+    const requestBody: any = { title, state: 'PUBLISHED', workType: 'ASSIGNMENT' };
+    
+    // Default to 100 points
+    requestBody.maxPoints = 100;
+
+    const res = await classroom.courses.courseWork.create({ courseId: id, requestBody });
+    emit({ coursework: res.data }, globals, (data) => console.log(`Created assignment: ${data.coursework.title} (ID: ${data.coursework.id})`));
+  } else {
+    throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown coursework verb: ${verb}` });
+  }
 }
 
 export async function handleTopic(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -163,12 +180,33 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
   } else if (verb === 'create') {
     const title = argv['title'];
     const topicId = argv['topic'];
-    const link = argv['link'];
+    const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
+    const files = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+    
     if (!title) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--title is required' });
     
     const requestBody: any = { title, state: 'PUBLISHED' };
     if (topicId) requestBody.topicId = topicId;
-    if (link) requestBody.materials = [{ link: { url: link } }];
+    
+    const materialsArr: any[] = [];
+    
+    for (const link of links) {
+      materialsArr.push({ link: { url: link } });
+    }
+    
+    if (files.length > 0) {
+      // Need to dynamically import to avoid circular dep if any, or just import at top.
+      const { uploadToDrive } = await import('./drive.js');
+      for (const file of files) {
+        note(`Uploading ${file} to Google Drive...`, globals);
+        const fileId = await uploadToDrive(file, globals);
+        materialsArr.push({ driveFile: { driveFile: { id: fileId }, shareMode: 'VIEW' } });
+      }
+    }
+    
+    if (materialsArr.length > 0) {
+      requestBody.materials = materialsArr;
+    }
 
     const res = await classroom.courses.courseWorkMaterials.create({ courseId, requestBody });
     emit({ material: res.data }, globals, (data) => console.log(`Created material: ${data.material.title}`));
@@ -231,13 +269,34 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
   if (!submission) throw new AppError('NOT_FOUND', { name: 'NotFound', human: 'Submission not found for you' });
 
   if (verb === 'submit') {
-    const link = argv['link'];
-    if (!link) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--link is required' });
+    const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
+    const files = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+    
+    if (links.length === 0 && files.length === 0) {
+      throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'At least one --link or --file is required' });
+    }
+
+    const addAttachments: any[] = [];
+    
+    for (const link of links) {
+      addAttachments.push({ link: { url: link } });
+    }
+    
+    if (files.length > 0) {
+      const { uploadToDrive } = await import('./drive.js');
+      for (const file of files) {
+        note(`Uploading ${file} to Google Drive...`, globals);
+        const fileId = await uploadToDrive(file, globals);
+        addAttachments.push({ driveFile: { id: fileId } });
+      }
+    }
+
     await classroom.courses.courseWork.studentSubmissions.modifyAttachments({
       courseId, courseWorkId, id: submission.id!,
-      requestBody: { addAttachments: [{ link: { url: link } }] }
+      requestBody: { addAttachments }
     });
-    emit({ success: true }, globals, () => console.log(`Attached link to submission.`));
+    
+    emit({ success: true }, globals, () => console.log(`Successfully attached ${addAttachments.length} items to submission.`));
   } else if (verb === 'turn-in') {
     await classroom.courses.courseWork.studentSubmissions.turnIn({ courseId, courseWorkId, id: submission.id! });
     emit({ success: true }, globals, () => console.log(`Turned in assignment.`));
