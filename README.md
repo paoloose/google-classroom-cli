@@ -78,13 +78,14 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom roster remove <id> --email="<email>"` - Remove a student
 
 ### Coursework & Content
-- `classroom stream list <id>` - List announcements
-- `classroom stream post <id> --text="<msg>"` - Post an announcement
-- `classroom work list <id>` - List coursework
+- `classroom stream list <id>` - Get announcements
+- `classroom stream post <id> --text="<text>"` - Post an announcement
+- `classroom work list <id>` - Get assignments for a course
+- `classroom work create <id> --title="<title>"` - Create an assignment
 - `classroom topic list <id>` - List topics
-- `classroom topic create <id> --name="<name>"` - Create a topic
+- `classroom topic create <id> --name="<name>"` - Create a new topic
 - `classroom material list <id>` - List classwork materials
-- `classroom material create <id> --title="<title>"` - Create classwork material
+- `classroom material create <id> --title="<title>" [--file="<path>"] [--link="<url>"]` - Create material (supports multiple --file and --link)
 
 ### Grading & Submissions (Teachers)
 - `classroom submissions list <course_id> <work_id>` - View all student submissions
@@ -92,10 +93,10 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom submissions return <course_id> <work_id> <student_id>` - Return grades to student
 
 ### Student Actions
-- `classroom submit <course_id> <work_id> --link="<url>"` - Attach work to an assignment
-- `classroom turn-in <course_id> <work_id>` - Turn in an assignment
-- `classroom unsubmit <course_id> <work_id>` - Unsubmit an assignment
-- `classroom tasks pending` - View all pending assignments across all courses
+- `classroom submit <course_id> <work_id> [--file="<path>"] [--link="<url>"]` - Upload to Google Drive and attach files/links to your submission
+- `classroom turn-in <course_id> <work_id>` - Hand in your submission
+- `classroom unsubmit <course_id> <work_id>` - Retract your submission
+- `classroom tasks pending` - Global aggregator: get all your missing/active work across all active courses
 - `classroom tasks due-soon` - View all assignments due in the next 7 days
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.

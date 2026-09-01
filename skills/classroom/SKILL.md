@@ -35,20 +35,22 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
   - Removes a user from the course.
 
 ### Coursework & Content
-- `classroom stream list <id>`
-  - Get announcements for a course.
-- `classroom stream post <id> --text="<text>" [--scheduled="<ISO_DATE>"]`
-  - Post an announcement to the stream.
-- `classroom work list <id>`
-  - Get coursework (assignments, quizzes, materials) for a course.
-- `classroom topic list <id>`
+- `classroom work list <course_id>`
+  - List all coursework (assignments, quizzes, questions) in a course, including formatting of dates and time-left.
+- `classroom work create <course_id> --title="<title>"`
+  - Create a new assignment in a course.
+- `classroom topic list <course_id>`
   - List all topics in a course.
-- `classroom topic create <id> --name="<name>"`
-  - Create a new topic.
-- `classroom material list <id>`
+- `classroom topic create <course_id> --name="<name>"`
+  - Create a new topic for organizing coursework.
+- `classroom material list <course_id>`
   - List all classwork materials.
-- `classroom material create <id> --title="<title>" [--topic=<topic_id>] [--link="<url>"]`
-  - Create a new classwork material with an optional link.
+- `classroom material create <course_id> --title="<title>" [--topic=<topic_id>] [--link="<url>"] [--file="<local_path>"]`
+  - Create new material. Can specify multiple `--link` or `--file` flags. Local files are automatically uploaded to Google Drive.
+- `classroom stream list <course_id>`
+  - List all announcements on the course stream.
+- `classroom stream post <course_id> --text="<content>"`
+  - Post a new announcement to the course stream.
 
 ### Grading & Submissions (Teacher)
 - `classroom submissions list <course_id> <work_id>`
