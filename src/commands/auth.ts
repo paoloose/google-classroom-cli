@@ -14,7 +14,7 @@ import { getAppPaths, ensureHome } from '../../cli/foundation/xdg-paths.js';
 
 const paths = getAppPaths('classroom-cli');
 
-const STUDENT_SCOPES = [
+const ALL_SCOPES = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
   'https://www.googleapis.com/auth/classroom.coursework.me',
   'https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly',
@@ -22,10 +22,7 @@ const STUDENT_SCOPES = [
   'https://www.googleapis.com/auth/classroom.topics.readonly',
   'https://www.googleapis.com/auth/classroom.guardianlinks.me.readonly',
   'https://www.googleapis.com/auth/classroom.profile.emails',
-  'https://www.googleapis.com/auth/classroom.profile.photos'
-];
-
-const TEACHER_SCOPES = [
+  'https://www.googleapis.com/auth/classroom.profile.photos',
   'https://www.googleapis.com/auth/classroom.courses',
   'https://www.googleapis.com/auth/classroom.coursework.students',
   'https://www.googleapis.com/auth/classroom.courseworkmaterials',
@@ -43,17 +40,15 @@ function openUrl(url: string) {
   else exec(`xdg-open "${url}"`);
 }
 
-async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals: GlobalFlags, isTeacher: boolean): Promise<{ access_token: string, refresh_token?: string }> {
+async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals: GlobalFlags): Promise<{ access_token: string, refresh_token?: string }> {
   return new Promise((resolve, reject) => {
     const port = 3000;
     const redirectUri = `http://localhost:${port}/oauth2callback`;
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 
-    const scopes = isTeacher ? Array.from(new Set([...STUDENT_SCOPES, ...TEACHER_SCOPES])) : STUDENT_SCOPES;
-
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: scopes,
+      scope: Array.from(new Set(ALL_SCOPES)),
       prompt: 'consent'
     });
 
@@ -112,7 +107,6 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
   if (verb === 'login') {
     let clientId = argv['client-id'] || process.env.CLASSROOM_CLIENT_ID;
     let clientSecret = argv['client-secret'] || process.env.CLASSROOM_CLIENT_SECRET;
-    const isTeacher = !!argv['teacher'];
     
     const credsPath = join(paths.config, 'credentials.json');
     if (!clientId || !clientSecret) {
@@ -153,7 +147,7 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
     }
 
     try {
-      const tokens = await runLocalOAuthFlow(clientId, clientSecret, globals, isTeacher);
+      const tokens = await runLocalOAuthFlow(clientId, clientSecret, globals);
       await saveSession(paths.sessions, { 
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
@@ -161,7 +155,7 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
         client_secret: clientSecret,
         createdAt: new Date().toISOString() 
       });
-      emit({ loggedIn: true, role: isTeacher ? 'teacher' : 'student' }, globals, () => console.log(`\nSuccessfully logged in to Google Classroom as ${isTeacher ? 'Teacher' : 'Student'}.`));
+      emit({ loggedIn: true }, globals, () => console.log(`\nSuccessfully logged in to Google Classroom with all scopes.`));
     } catch (e: any) {
       throw new AppError('OAUTH_FAILED', {
         name: 'OAuthFailed',

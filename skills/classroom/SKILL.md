@@ -10,8 +10,8 @@ This CLI provides a wrapper around the Google Classroom API. It is agent-first, 
 ## Commands
 
 ### Core Auth
-- `classroom auth login [--teacher] [--client-id=<id> --client-secret=<secret>]`
-  - Authenticate the CLI using an OAuth 2.0 Desktop flow. Use `--teacher` to request write-access scopes for courses and grading.
+- `classroom auth login [--client-id=<id> --client-secret=<secret>]`
+  - Authenticate the CLI using an OAuth 2.0 Desktop flow. Requests all available Google Classroom scopes. Users can deselect scopes they don't want in the Google OAuth web UI.
   - Automatically attempts to load credentials from `credentials.json` if placed in the standard configuration directory (e.g., `~/.config/classroom-cli/credentials.json` on macOS/Linux).
 - `classroom auth logout`
   - Clear the stored credentials.

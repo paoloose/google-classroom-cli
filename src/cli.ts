@@ -20,7 +20,7 @@ async function main() {
     if (!globals.json) printBanner({ name: 'Classroom', tagline: 'Classroom CLI' });
     console.error('Usage: classroom <noun> <verb> [options]');
     console.error('Core:');
-    console.error('  auth login            Authenticate (use --teacher for full scopes)');
+    console.error('  auth login            Authenticate');
     console.error('  auth logout           Clear credentials');
     console.error('Courses & Rosters:');
     console.error('  course list           List active courses');

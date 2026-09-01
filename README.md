@@ -65,7 +65,7 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 ## Commands
 
 ### Core Auth
-- `classroom auth login [--teacher]` - Authenticate (use `--teacher` to get write/grade scopes)
+- `classroom auth login` - Authenticate (requests all scopes by default)
 - `classroom auth logout` - Clear credentials
 
 ### Courses & Rosters
