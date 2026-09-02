@@ -98,3 +98,52 @@ export function formatAttachments(materials: any[], sizeMap?: Map<string, string
   if (!materials || materials.length === 0) return undefined;
   return materials.map(att => formatAttachmentItem(att, sizeMap));
 }
+
+export interface AttachedFile {
+  type: 'driveFile' | 'link' | 'youtube' | 'form' | 'unknown';
+  id?: string;
+  title?: string;
+  size?: string | null;
+  url?: string;
+  alternateLink?: string;
+}
+
+export function extractAttachedFiles(materials: any[], sizeMap?: Map<string, string>): AttachedFile[] {
+  if (!materials || !Array.isArray(materials)) return [];
+  return materials.map(att => {
+    const file = att.driveFile?.driveFile || att.driveFile;
+    if (file) {
+      const size = file.id && sizeMap ? formatBytes(sizeMap.get(file.id)) : null;
+      return {
+        type: 'driveFile' as const,
+        id: file.id,
+        title: file.title,
+        alternateLink: file.alternateLink,
+        size
+      };
+    }
+    if (att.link) {
+      return {
+        type: 'link' as const,
+        title: att.link.title,
+        url: att.link.url
+      };
+    }
+    if (att.youtubeVideo) {
+      return {
+        type: 'youtube' as const,
+        id: att.youtubeVideo.id,
+        title: att.youtubeVideo.title,
+        url: att.youtubeVideo.alternateLink
+      };
+    }
+    if (att.form) {
+      return {
+        type: 'form' as const,
+        title: att.form.title,
+        url: att.form.formUrl
+      };
+    }
+    return { type: 'unknown' as const };
+  });
+}

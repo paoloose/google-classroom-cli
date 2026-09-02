@@ -5,7 +5,7 @@ import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-fil
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
-import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
+import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 import { resolveCourseId } from '../context.js';
 
@@ -193,7 +193,12 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const fileIds = shouldFetchRelated ? extractDriveFileIds(coursework) : [];
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
-      emit({ coursework }, globals, (data) => {
+      const enrichedCoursework = coursework.map((cw: any) => ({
+        ...cw,
+        ...(shouldFetchRelated ? { files: extractAttachedFiles(cw.materials, sizeMap) } : {})
+      }));
+
+      emit({ coursework: enrichedCoursework }, globals, (data) => {
         if (data.coursework.length === 0) { 
           console.log(pc.yellow('No coursework found.')); 
           return; 
@@ -365,13 +370,44 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
 
   if (verb === 'list') {
     const courseId = resolveCourseId(argv._[2]);
-    const res = await classroom.courses.topics.list({ courseId });
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+
+    note(shouldFetchRelated ? `Fetching topics and related resources for course ${courseId}...` : `Fetching topics for course ${courseId}...`, globals);
+    const [res, cwRes, matRes] = await Promise.all([
+      classroom.courses.topics.list({ courseId }),
+      shouldFetchRelated ? classroom.courses.courseWork.list({ courseId }).catch(() => ({ data: { courseWork: [] } })) : Promise.resolve({ data: { courseWork: [] } }),
+      shouldFetchRelated ? classroom.courses.courseWorkMaterials.list({ courseId }).catch(() => ({ data: { courseWorkMaterial: [] } })) : Promise.resolve({ data: { courseWorkMaterial: [] } })
+    ]);
+
     const raw = res.data.topic || [];
+    const allCw = cwRes.data.courseWork || [];
+    const allMat = matRes.data.courseWorkMaterial || [];
+
     const range = resolveDateRange(globals.from, globals.last);
     const topics = applyDateFilter(raw, range, (t: any) => t.updateTime);
-    const isFull = !!argv.full;
-    
-    emit({ topics }, globals, (data) => {
+
+    const fileIds = shouldFetchRelated ? extractDriveFileIds([...allCw, ...allMat]) : [];
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+
+    const enrichedTopics = topics.map((t: any) => {
+      if (!shouldFetchRelated) return t;
+      const topicMat = allMat.filter((m: any) => m.topicId === t.topicId).map((m: any) => ({
+        ...m,
+        files: extractAttachedFiles(m.materials, sizeMap)
+      }));
+      const topicCw = allCw.filter((cw: any) => cw.topicId === t.topicId).map((cw: any) => ({
+        ...cw,
+        files: extractAttachedFiles(cw.materials, sizeMap)
+      }));
+      return {
+        ...t,
+        materials: topicMat,
+        coursework: topicCw
+      };
+    });
+
+    emit({ topics: enrichedTopics }, globals, (data) => {
       if (data.topics.length === 0) {
         console.log(pc.yellow('No topics found.'));
         return;
@@ -383,6 +419,30 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
         };
         if (isFull) {
           item.details = [['Updated', t.updateTime]];
+        }
+        if (shouldFetchRelated) {
+          const relatedLines: string[] = [];
+          if (t.materials && t.materials.length > 0) {
+            for (const m of t.materials) {
+              relatedLines.push(`📁 Material: ${m.title}`);
+              const atts = formatAttachments(m.materials, sizeMap);
+              if (atts) {
+                for (const att of atts) relatedLines.push(`   ${att}`);
+              }
+            }
+          }
+          if (t.coursework && t.coursework.length > 0) {
+            for (const cw of t.coursework) {
+              relatedLines.push(`📝 Assignment: ${cw.title}`);
+              const atts = formatAttachments(cw.materials, sizeMap);
+              if (atts) {
+                for (const att of atts) relatedLines.push(`   ${att}`);
+              }
+            }
+          }
+          if (relatedLines.length > 0) {
+            item.attachments = relatedLines;
+          }
         }
         return item;
       }));
@@ -419,7 +479,16 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     const fileIds = shouldFetchRelated ? extractDriveFileIds([coursework, materials]) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
-    emit({ topic, coursework, materials }, globals, (data) => {
+    const enrichedCw = coursework.map((cw: any) => ({
+      ...cw,
+      files: extractAttachedFiles(cw.materials, sizeMap)
+    }));
+    const enrichedMat = materials.map((m: any) => ({
+      ...m,
+      files: extractAttachedFiles(m.materials, sizeMap)
+    }));
+
+    emit({ topic, coursework: enrichedCw, materials: enrichedMat }, globals, (data) => {
       if (shouldFetchRelated) console.log(pc.green(`\n✔ Topic:`));
       const topicItem: BlockItem = { title: data.topic.name, id: data.topic.topicId };
       if (isFull) topicItem.details = [['Updated', data.topic.updateTime]];
@@ -487,8 +556,12 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     
     const fileIds = shouldFetchRelated ? extractDriveFileIds(materials) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
-    
-    emit({ materials }, globals, (data) => {
+    const enrichedMaterials = materials.map((m: any) => ({
+      ...m,
+      ...(shouldFetchRelated ? { files: extractAttachedFiles(m.materials, sizeMap) } : {})
+    }));
+
+    emit({ materials: enrichedMaterials }, globals, (data) => {
       if (data.materials.length === 0) { 
         console.log(pc.yellow('No materials found.')); 
         return; 

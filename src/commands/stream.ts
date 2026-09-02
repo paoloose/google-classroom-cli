@@ -5,7 +5,7 @@ import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-fil
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
-import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
+import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { resolveCourseId } from '../context.js';
 
 export async function handleStream(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -24,7 +24,12 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     const fileIds = shouldFetchRelated ? extractDriveFileIds(announcements) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
-    emit({ announcements }, globals, (data) => {
+    const enrichedAnnouncements = announcements.map((a: any) => ({
+      ...a,
+      ...(shouldFetchRelated ? { files: extractAttachedFiles(a.materials, sizeMap) } : {})
+    }));
+
+    emit({ announcements: enrichedAnnouncements }, globals, (data) => {
       if (data.announcements.length === 0) { 
         console.log(pc.yellow('No announcements found.')); 
         return; 
