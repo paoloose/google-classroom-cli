@@ -4,12 +4,11 @@ import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import * as yaml from 'js-yaml';
 import pc from 'picocolors';
+import { highlight } from 'cli-highlight';
 
 function printYaml(obj: any) {
-  const yml = yaml.dump(obj, { sortKeys: true });
-  // Colorize keys (e.g. "key:")
-  const colored = yml.replace(/^(\s*)([a-zA-Z0-9_-]+):/gm, `$1${pc.cyan('$2')}:`);
-  console.log(colored);
+  const yml = yaml.dump(obj, { sortKeys: true, forceQuotes: true });
+  console.log(highlight(yml, { language: 'yaml', ignoreIllegals: true }));
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
