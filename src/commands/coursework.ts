@@ -214,13 +214,22 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             id: cw.id,
             details: [
               ['State', stateColor],
-              ['Due', cw.dueDate ? pc.yellow(dueStr) : dueStr]
+              ['Due', cw.dueDate ? pc.yellow(dueStr) : dueStr],
+              ...(cw.maxPoints !== undefined ? [['Max Points', String(cw.maxPoints)] as [string, string]] : []),
+              ...(cw.creationTime ? [['Created', cw.creationTime] as [string, string]] : []),
+              ...(cw.updateTime ? [['Updated', cw.updateTime] as [string, string]] : []),
+              ...(cw.alternateLink ? [['Link', pc.blue(pc.underline(cw.alternateLink))] as [string, string]] : []),
+              ...(cw.description ? [['Description', cw.description] as [string, string]] : [])
             ]
           };
           if (isFull) {
-            if (cw.maxPoints !== undefined) item.details!.push(['Max Points', String(cw.maxPoints)]);
-            if (cw.description) item.details!.push(['Description', cw.description.split('\n')[0]]);
-            if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+            if (cw.courseId) item.details!.push(['Course ID', cw.courseId]);
+            if (cw.workType) item.details!.push(['Type', cw.workType]);
+            if (cw.topicId) item.details!.push(['Topic ID', cw.topicId]);
+            if (cw.creatorUserId) item.details!.push(['Creator ID', cw.creatorUserId]);
+            if (cw.submissionModificationMode) item.details!.push(['Submission Mode', cw.submissionModificationMode]);
+            if (cw.assigneeMode) item.details!.push(['Assignee Mode', cw.assigneeMode]);
+            if (cw.scheduledTime) item.details!.push(['Scheduled', cw.scheduledTime]);
           }
 
           const atts = formatAttachments(cw.materials, sizeMap);
