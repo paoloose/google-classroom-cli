@@ -102,6 +102,89 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
+## Global Filtering Flags
+
+Every list-style command (`course list`, `work list`, `stream list`, `material list`, `topic list`, `submissions list`, `tasks pending`, `tasks due-soon`, plus the related sub-blocks of `get` commands) accepts two optional flags that filter the returned items by date.
+
+### `--from <date>`
+
+Include only items dated on or after `<date>`. ISO 8601 is preferred and tried first; any [date-fns-parseable](https://date-fns.org/v4.4.0/docs/parse) format is also accepted.
+
+- **Full date / timestamp:** `--from 2025-01-31`, `--from 2025-01-31T08:00:00Z`
+- **Slash / dotted variants:** `--from 2025/01/31`, `--from 2025.01.31`
+- **Human formats:** `--from "Jan 31, 2025"`
+- **Year omitted:** missing year is filled with the current one.
+- **Year + month only:** missing day is **not** auto-filled — the day is required so the date is unambiguous.
+
+You can also pass a bare day number, which resolves to day-N of the current month and year:
+
+- `--from 15` → the 15th of the current month of the current year
+
+You may also use the environment variable `CLI_FROM`.
+
+### `--last <duration>`
+
+Include only items dated within the last `<duration>` from now. This is a shortcut for `--from "<now - duration>"`.
+
+Format: `<n>y<n>m<n>d<n>h<n>m<n>s`
+
+| Indicator | Meaning     |
+|-----------|-------------|
+| `y`       | years (365d)|
+| `m`       | months (30d)|
+| `d`       | days        |
+| `h`       | hours       |
+| `m`       | minutes     |
+| `s`       | seconds     |
+
+- At least **one** indicator is required.
+- Each indicator may appear **at most once**.
+- Examples: `--last 7d`, `--last 24h`, `--last 1y2m3d`, `--last 30m`, `--last 1h30m` (invalid — minute indicator repeated).
+
+You may also use the environment variable `CLI_LAST`.
+
+### Combining flags
+
+- `--from` and `--last` are **mutually exclusive** — passing both is an error.
+- Without either flag, every list command behaves exactly as before.
+
+### Which date is used per command
+
+| Command                                | Primary date field                | Fallback     |
+|----------------------------------------|-----------------------------------|--------------|
+| `course list` / `course get`           | `updateTime`                      | `creationTime` |
+| `work list` / `work get`               | `dueDate`                         | `updateTime` |
+| `material list` / `material get`       | `updateTime`                      | —            |
+| `topic list` / `topic get`             | `updateTime`                      | —            |
+| `stream list` / `stream get`           | `updateTime`                      | —            |
+| `submissions list`                     | `updateTime`                      | `creationTime` |
+| `tasks pending`                        | `dueDate`                         | —            |
+| `tasks due-soon`                       | `dueDate`                         | —            |
+
+The same filter is also applied to the related sub-blocks (`topics`, `coursework`, `materials`, `stream`) inside `course get` and `topic get`.
+
+### Examples
+
+```bash
+# Assignments due this week
+classroom work list <course_id> --last 7d
+
+# All coursework created since the start of the school year
+classroom course list --from 2025-08-01
+
+# Bare day → 15th of this month
+classroom stream list <course_id> --from 15
+
+# Announcements in the last 24 hours, in JSON for an agent
+classroom stream list <course_id> --last 24h --json
+
+# Tasks due over the next 30 days instead of the default 7
+classroom tasks due-soon --last 30d
+
+# Combine with --related; related items are also filtered
+classroom course get <course_id> --related --from 2025-01-01
+```
+
 ## ⚠️ Known API Limitations & Quirks
 During the development and dogfooding of this CLI, we uncovered several strict security boundaries enforced by the Google Classroom API:
 

@@ -25,6 +25,10 @@ export type GlobalFlags = {
   quiet: boolean;
   /** Verbose logging to stderr. */
   verbose: boolean;
+  /** Inclusive start date for output filtering (ISO or partial). */
+  from: string | undefined;
+  /** Relative duration window for output filtering (e.g. "7d", "24h"). */
+  last: string | undefined;
 };
 
 /**
@@ -41,6 +45,8 @@ export function parseGlobalFlags(raw: Record<string, unknown> = {}): GlobalFlags
     noInput: Boolean(raw.noInput ?? raw["no-input"] ?? process.env.CI === "true"),
     quiet: Boolean(raw.quiet ?? raw.q ?? false),
     verbose: Boolean(raw.verbose ?? raw.v ?? false),
+    from: (raw.from as string) ?? process.env.CLI_FROM ?? undefined,
+    last: (raw.last as string) ?? process.env.CLI_LAST ?? undefined,
   };
 }
 
@@ -61,5 +67,7 @@ export function getGlobalFlagDefs() {
     { flag: "--no-input", description: "Never prompt, fail fast" },
     { flag: "-q, --quiet", description: "Suppress non-essential output" },
     { flag: "-v, --verbose", description: "Verbose logging to stderr" },
+    { flag: "--from <date>", description: "Filter output to items on/after this date (ISO preferred; partial dates fill from current)" },
+    { flag: "--last <duration>", description: "Filter output to items within this duration window from now (e.g. 7d, 24h, 1y2m)" },
   ] as const;
 }
