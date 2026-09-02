@@ -20,7 +20,8 @@ async function main() {
   const allowedFlags = new Set([
     'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
-    'text', 'title', 'link', 'file', 'dest', 'score', 'topic'
+    'text', 'title', 'link', 'file', 'dest', 'score', 'topic',
+    'code', 'cjc', 'course', 'courseId'
   ]);
   for (const key of Object.keys(argv)) {
     if (key !== '_' && !allowedFlags.has(key)) {
@@ -72,6 +73,8 @@ async function main() {
         ['course deselect', 'Clear active course context'],
         ['course current', 'Show currently selected course'],
         ['course get [id]', 'Get details of a course (defaults to selected course)'],
+        ['course enroll [id] <code>', 'Join a course with enrollment code or invite link'],
+        ['course unenroll [id]', 'Leave a course (defaults to selected course)'],
         ['course create', 'Create a course (requires --name)'],
         ['course update [id]', 'Update a course status (requires --status)'],
         ['roster list [id]', 'List students (or use --role=teacher)'],
@@ -102,6 +105,8 @@ async function main() {
       ]);
       
       printCategory('Student Actions', [
+        ['enroll [id] <code>', 'Join a course with enrollment code or invite link'],
+        ['unenroll [id]', 'Leave a course (defaults to selected course)'],
         ['submit <c_id> <w_id>', 'Attach a link/file (requires --link/--file)'],
         ['turn-in <c_id> <w_id>', 'Turn in assignment'],
         ['unsubmit <c_id> <w_id>', 'Unsubmit assignment'],
@@ -136,6 +141,8 @@ async function main() {
     
     // Some are slightly renamed/grouped for CLI UX
     if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['work', argv._[1], argv._[2], argv._[3]] });
+    if (noun === 'enroll' || noun === 'join') return await handleCourse('enroll', globals, { ...argv, _: ['course', 'enroll', argv._[1], argv._[2]] });
+    if (noun === 'unenroll' || noun === 'leave') return await handleCourse('unenroll', globals, { ...argv, _: ['course', 'unenroll', argv._[1]] });
     if (noun === 'submit') return await handleStudentAction('submit', globals, { ...argv, _: ['student', 'submit', argv._[1], argv._[2]]});
     if (noun === 'turn-in') return await handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
     if (noun === 'unsubmit') return await handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});

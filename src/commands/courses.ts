@@ -10,6 +10,33 @@ import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../
 import { parseDueDate } from '../date-utils.js';
 import { getActiveCourse, setActiveCourse, clearActiveCourse, resolveCourseId } from '../context.js';
 
+function parseCourseInvite(arg?: string): { courseId?: string; code?: string } {
+  if (!arg || typeof arg !== 'string') return {};
+  if (arg.includes('classroom.google.com')) {
+    try {
+      const url = new URL(arg.startsWith('http') ? arg : `https://${arg}`);
+      const cjc = url.searchParams.get('cjc');
+      const pathMatch = url.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
+      let courseId: string | undefined;
+      if (pathMatch) {
+        const raw = pathMatch[1];
+        if (/^\d+$/.test(raw)) {
+          courseId = raw;
+        } else {
+          try {
+            const decoded = Buffer.from(raw, 'base64').toString('utf8');
+            if (/^\d+$/.test(decoded)) {
+              courseId = decoded;
+            }
+          } catch {}
+        }
+      }
+      return { courseId, code: cjc || undefined };
+    } catch {}
+  }
+  return {};
+}
+
 function getCourseBlock(c: any, full: boolean = false, isSelected: boolean = false): BlockItem {
   const details: [string, string][] = [];
   if (c.courseState || full) details.push(['Status', c.courseState === 'ACTIVE' ? pc.green('ACTIVE') : pc.yellow(c.courseState || 'N/A')]);
@@ -301,6 +328,88 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
         ]
       }]);
     });
+  } else if (verb === 'enroll' || verb === 'join') {
+    let courseId: string | undefined;
+    let code: string | undefined;
+
+    const arg1 = argv._[2];
+    const arg2 = argv._[3];
+
+    const parsed = parseCourseInvite(arg1);
+    if (parsed.courseId && parsed.code) {
+      courseId = parsed.courseId;
+      code = parsed.code;
+    } else if (arg1 && arg2) {
+      courseId = arg1;
+      code = arg2;
+    } else if (arg1 && !arg2) {
+      code = arg1;
+      courseId = argv['course'] || argv['courseId'] || getActiveCourse()?.id;
+    }
+
+    if (!code) {
+      code = argv['code'] || argv['cjc'];
+    }
+    if (!courseId) {
+      courseId = argv['course'] || argv['courseId'];
+    }
+
+    if (!courseId || !code) {
+      throw new AppError('MISSING_ARG', {
+        name: 'MissingArg',
+        human: 'Both Course ID and enrollment code are required',
+        hint: 'classroom course enroll <course_id> <code> or classroom course enroll <invite_link>'
+      });
+    }
+
+    note(`Enrolling into course ${courseId} with code ${code}...`, globals);
+    try {
+      const res = await classroom.courses.students.create({
+        courseId,
+        enrollmentCode: code,
+        requestBody: { userId: 'me' }
+      });
+      const student = res.data;
+      emit({ success: true, courseId, student }, globals, () => {
+        console.log(pc.green(`✔ Successfully enrolled into course ${courseId}!`));
+      });
+    } catch (error: any) {
+      if (error.code === 409 || error.status === 409 || error.message?.includes('already exists')) {
+        emit({ success: true, alreadyEnrolled: true, courseId }, globals, () => {
+          console.log(pc.yellow(`You are already enrolled in course ${courseId}.`));
+        });
+        return;
+      }
+      throw new AppError('ENROLLMENT_FAILED', { name: 'EnrollmentFailed', human: error.message || 'Failed to enroll in course' }, error);
+    }
+  } else if (verb === 'unenroll' || verb === 'leave') {
+    let courseId: string;
+    try {
+      courseId = resolveCourseId(argv._[2]);
+    } catch {
+      throw new AppError('MISSING_ARG', {
+        name: 'MissingArg',
+        human: 'Course ID is required to unenroll',
+        hint: 'classroom course unenroll <course_id> or select a course first'
+      });
+    }
+
+    note(`Unenrolling from course ${courseId}...`, globals);
+    try {
+      await classroom.courses.students.delete({
+        courseId,
+        userId: 'me'
+      });
+      const active = getActiveCourse();
+      if (active?.id === courseId) {
+        clearActiveCourse();
+      }
+      emit({ success: true, courseId }, globals, () => {
+        console.log(pc.green(`✔ Successfully unenrolled from course ${courseId}.`));
+      });
+    } catch (error: any) {
+      throw new AppError('UNENROLL_FAILED', { name: 'UnenrollFailed', human: error.message || 'Failed to unenroll from course' }, error);
+    }
   } else {
     throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown course verb: ${verb}` });
   }
