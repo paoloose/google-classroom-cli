@@ -57,13 +57,15 @@ function formatTaskBlock(t: any, now: Date, shouldFetchRelated: boolean, isFull:
 
   if (isFull) {
     item.details!.push(['Course ID', t.courseId]);
+    if (t.courseWork.workType) item.details!.push(['Type', t.courseWork.workType]);
+    if (t.courseWork.topicId) item.details!.push(['Topic ID', t.courseWork.topicId]);
+    if (t.courseWork.creatorUserId) item.details!.push(['Creator ID', t.courseWork.creatorUserId]);
     if (t.courseWork.state) item.details!.push(['State', t.courseWork.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(t.courseWork.state)]);
     if (t.courseWork.maxPoints !== undefined) item.details!.push(['Max Points', String(t.courseWork.maxPoints)]);
-    if (t.courseWork.description) {
-      const descPreview = t.courseWork.description.split('\n')[0];
-      item.details!.push(['Description', descPreview + (t.courseWork.description.length > descPreview.length ? '...' : '')]);
-    }
+    if (t.courseWork.creationTime) item.details!.push(['Created', t.courseWork.creationTime]);
+    if (t.courseWork.updateTime) item.details!.push(['Updated', t.courseWork.updateTime]);
     if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
+    if (t.courseWork.description) item.details!.push(['Description', t.courseWork.description]);
   }
 
   if (shouldFetchRelated) {
@@ -282,9 +284,18 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         };
         
         if (isFull) {
-          if (data.coursework.description) item.details!.push(['Description', data.coursework.description.split('\n')[0] + (data.coursework.description.includes('\n') ? '...' : '')]);
+          if (data.coursework.courseId) item.details!.push(['Course ID', data.coursework.courseId]);
+          if (data.coursework.workType) item.details!.push(['Type', data.coursework.workType]);
+          if (data.coursework.topicId) item.details!.push(['Topic ID', data.coursework.topicId]);
+          if (data.coursework.creatorUserId) item.details!.push(['Creator ID', data.coursework.creatorUserId]);
           if (data.coursework.maxPoints !== undefined) item.details!.push(['Max Points', String(data.coursework.maxPoints)]);
+          if (data.coursework.submissionModificationMode) item.details!.push(['Submission Mode', data.coursework.submissionModificationMode]);
+          if (data.coursework.assigneeMode) item.details!.push(['Assignee Mode', data.coursework.assigneeMode]);
+          if (data.coursework.creationTime) item.details!.push(['Created', data.coursework.creationTime]);
+          if (data.coursework.updateTime) item.details!.push(['Updated', data.coursework.updateTime]);
+          if (data.coursework.scheduledTime) item.details!.push(['Scheduled', data.coursework.scheduledTime]);
           if (data.coursework.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
+          if (data.coursework.description) item.details!.push(['Description', data.coursework.description]);
         }
 
         if (shouldFetchRelated) {
@@ -310,6 +321,15 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           const grade = data.submission.draftGrade !== undefined ? data.submission.draftGrade : (data.submission.assignedGrade !== undefined ? data.submission.assignedGrade : undefined);
           if (grade !== undefined) {
             subItem.details!.push(['Grade', String(grade)]);
+          }
+
+          if (isFull) {
+            if (data.submission.courseId) subItem.details!.push(['Course ID', data.submission.courseId]);
+            if (data.submission.courseWorkType) subItem.details!.push(['Work Type', data.submission.courseWorkType]);
+            if (data.submission.creationTime) subItem.details!.push(['Created', data.submission.creationTime]);
+            if (data.submission.updateTime) subItem.details!.push(['Updated', data.submission.updateTime]);
+            if (data.submission.late !== undefined) subItem.details!.push(['Late', data.submission.late ? pc.red('Yes') : pc.green('No')]);
+            if (data.submission.alternateLink) subItem.details!.push(['Link', pc.blue(pc.underline(data.submission.alternateLink))]);
           }
           
           const subAtts = formatAttachments(data.submission.assignmentSubmission?.attachments, sizeMap);
@@ -520,8 +540,14 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
         details: [['State', stateColor]]
       };
       if (isFull) {
-        if (mat.description) item.details!.push(['Description', mat.description.split('\n')[0] + (mat.description.includes('\n') ? '...' : '')]);
+        if (mat.courseId) item.details!.push(['Course ID', mat.courseId]);
+        if (mat.topicId) item.details!.push(['Topic ID', mat.topicId]);
+        if (mat.creatorUserId) item.details!.push(['Creator ID', mat.creatorUserId]);
+        if (mat.creationTime) item.details!.push(['Created', mat.creationTime]);
+        if (mat.updateTime) item.details!.push(['Updated', mat.updateTime]);
+        if (mat.scheduledTime) item.details!.push(['Scheduled', mat.scheduledTime]);
         if (mat.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(mat.alternateLink))]);
+        if (mat.description) item.details!.push(['Description', mat.description]);
       }
       
       if (shouldFetchRelated) {

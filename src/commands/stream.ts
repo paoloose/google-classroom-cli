@@ -76,7 +76,14 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
           ['Posted', a.updateTime]
         ]
       };
-      if (isFull && a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+      if (isFull) {
+        if (a.courseId) item.details!.push(['Course ID', a.courseId]);
+        if (a.creatorUserId) item.details!.push(['Creator ID', a.creatorUserId]);
+        if (a.creationTime) item.details!.push(['Created', a.creationTime]);
+        if (a.scheduledTime) item.details!.push(['Scheduled', a.scheduledTime]);
+        if (a.assigneeMode) item.details!.push(['Assignee Mode', a.assigneeMode]);
+        if (a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+      }
       
       if (shouldFetchRelated) {
         const atts = formatAttachments(a.materials, sizeMap);

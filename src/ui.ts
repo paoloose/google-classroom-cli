@@ -22,7 +22,13 @@ export function printBlock(items: BlockItem[]) {
     if (details.length > 0) {
       const maxLen = Math.max(...details.map(d => d[0].length));
       for (const [k, v] of details) {
-        console.log(`  ${pc.dim((k + ':').padEnd(maxLen + 1))} ${v}`);
+        const prefix = `  ${pc.dim((k + ':').padEnd(maxLen + 1))} `;
+        const indent = ' '.repeat(maxLen + 4);
+        const lines = String(v).split('\n');
+        console.log(`${prefix}${lines[0]}`);
+        for (let i = 1; i < lines.length; i++) {
+          console.log(`${indent}${lines[i]}`);
+        }
       }
     }
     
