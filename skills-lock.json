@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "classroom": {
+      "source": "paoloose/google-classroom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/classroom/SKILL.md",
+      "computedHash": "4afdb4fb2eecb9b8ab267ec643f984d562b7d5284d899e5d73fc93c401d58d91"
+    },
     "cligentic": {
       "source": "Railly/cligentic",
       "sourceType": "github",

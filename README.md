@@ -4,11 +4,67 @@ A powerful, agent-first CLI for interacting with Google Classroom from your term
 
 ## Installation
 
-If you have the repository cloned, you can link it globally using `bun`:
+### One-line installer (recommended — no clone required)
+
+A bash installer ships with every release. By default it pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
+
+macOS / Linux / WSL / Git Bash:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
+```
+
+Windows (PowerShell 7+):
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.ps1 | iex
+```
+
+By default the CLI lives under `~/.config/classroom-cli/` (XDG on Unix, `%LOCALAPPDATA%\classroom-cli` on Windows) so credentials and state survive every upgrade. Override with `--install-dir <path>` or `CLASSROOM_CLI_HOME`.
+
+Useful flags (same on both platforms):
+
+| Flag / option                       | Effect                                                         |
+|-------------------------------------|----------------------------------------------------------------|
+| `--version vX.Y.Z` / `-Version vX.Y.Z` | Pin to a specific tag instead of "latest"                   |
+| `--prerelease` / `-Prerelease`      | Include `-beta` / `-rc` releases when resolving "latest"      |
+| `--channel beta` / `-Channel beta`  | Same as `--prerelease` but friendlier                          |
+| `--force` / `-Force`                | Re-download even if the installed version is the same          |
+| `--install-dir <path>` / `-InstallDir <path>` | Override the install root                          |
+| `--dry-run` / `-DryRun`             | Print what would happen, don't touch disk                      |
+
+Examples:
+
+```bash
+# Pin a specific version
+curl -fsSL .../install.sh | bash -s -- --version v0.0.1
+
+# Install a pre-release build
+curl -fsSL .../install.sh | bash -s -- --prerelease
+
+# Install into a custom directory
+curl -fsSL .../install.sh | bash -s -- --install-dir /opt/classroom-cli
+```
+
+### Update an existing install
+
+The installer detects your currently installed version (via `$CLASSROOM_CLI_HOME/repo/.classroom-cli-version`) and only fetches a new tarball when the resolved one is newer. So re-running the same one-liner acts as an update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
+```
+
+Add `--force` to reinstall the same version, or `--version v0.0.1` to roll back. The `sessions/` directory is preserved across every install, so `classroom auth login` only has to run once.
+
+### From a local clone (development)
+
+If you have the repository cloned, link it globally with bun:
 
 ```bash
 bun link
 ```
+
+The link approach runs directly from your working tree — no version pinning, no install dir.
 
 ## Agent Skills
 

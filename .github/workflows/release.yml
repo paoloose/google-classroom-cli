@@ -1,0 +1,195 @@
+name: release
+
+# Publishes a new release whenever a tag matching the Semantic Versioning
+# pattern is pushed (e.g. v0.0.1, v1.2.3, v1.0.0-beta.2, v2.0.0-rc.1).
+#
+# Behavior:
+#   1. Build a standalone executable for each allow-listed target.
+#   2. Bundle them (plus a source tarball) into per-target artifacts.
+#   3. Generate SHA-256 checksums for every file.
+#   4. Create (or replace) the GitHub Release for this tag and upload every
+#      file to it. The installer script reads these exact filenames and
+#      rejects anything else, so the allow-list is enforced on both ends.
+#
+# Required permissions (set in Settings → Actions → General):
+#   - Contents: write
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: linux
+            arch: x64
+          - target: linux-arm64
+            os: linux
+            arch: arm64
+          - target: darwin-x64
+            os: darwin
+            arch: x64
+          - target: darwin-arm64
+            os: darwin
+            arch: arm64
+          - target: windows-x64
+            os: windows
+            arch: x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build standalone executable
+        env:
+          BUN_COMPILE_TARGETS: ${{ matrix.target }}
+        run: |
+          mkdir -p release
+          case "${{ matrix.os }}-${{ matrix.arch }}" in
+            linux-x64)    bun build --compile --target=bun-linux-x64    --outfile=release/classroom    src/cli.ts ;;
+            linux-arm64)  bun build --compile --target=bun-linux-arm64  --outfile=release/classroom    src/cli.ts ;;
+            darwin-x64)   bun build --compile --target=bun-darwin-x64   --outfile=release/classroom    src/cli.ts ;;
+            darwin-arm64) bun build --compile --target=bun-darwin-arm64 --outfile=release/classroom    src/cli.ts ;;
+            windows-x64)  bun build --compile --target=bun-windows-x64  --outfile=release/classroom.exe src/cli.ts ;;
+            *) echo "Unsupported target ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+
+      - name: Bundle archive + checksum
+        working-directory: release
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          # Move the executable into staging under its canonical name.
+          if [[ "${{ matrix.os }}" == "windows" ]]; then
+            mv classroom.exe staging/classroom.exe
+          else
+            mv classroom staging/classroom
+          fi
+
+          # The installer expects this exact layout under repo/:
+          #   repo/dist/classroom[.exe]
+          # plus the version marker at repo/.classroom-cli-version.
+          mkdir -p archive
+          cp -R staging/. archive/dist/
+          cp "${{ github.workspace }}/.github/VERSION_TEMPLATE" archive/.classroom-cli-version 2>/dev/null || true
+          echo "${{ github.ref_name }}" > archive/.classroom-cli-version
+
+          # Build the artifact tarball.
+          tar -czf "classroom-cli_${{ matrix.target }}.tar.gz" -C archive .
+
+          # SHA-256 checksum sidecar.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "classroom-cli_${{ matrix.target }}.tar.gz" \
+              | awk '{print $1"  "$2}' > "classroom-cli_${{ matrix.target }}.tar.gz.sha256"
+          else
+            shasum -a 256 "classroom-cli_${{ matrix.target }}.tar.gz" \
+              | awk '{print $1"  "$2}' > "classroom-cli_${{ matrix.target }}.tar.gz.sha256"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: classroom-cli-${{ matrix.target }}
+          path: |
+            release/classroom-cli_${{ matrix.target }}.tar.gz
+            release/classroom-cli_${{ matrix.target }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  source-tarball:
+    name: source tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source tarball
+        run: |
+          mkdir -p release
+          # GitHub already provides the source as a zip on the release; we still
+          # ship a deterministic tar.gz so the installer can fetch it from a
+          # plain URL if desired. Excludes are limited to local-only files.
+          tar --exclude='./release' \
+              --exclude='./node_modules' \
+              --exclude='./.git' \
+              --exclude='./bun.lock' \
+              -czf release/classroom-cli_source.tar.gz \
+              -C "${{ github.workspace }}" .
+          sha256sum release/classroom-cli_source.tar.gz \
+            | awk '{print $1"  classroom-cli_source.tar.gz"}' \
+            > release/classroom-cli_source.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: classroom-cli-source
+          path: |
+            release/classroom-cli_source.tar.gz
+            release/classroom-cli_source.tar.gz.sha256
+          retention-days: 14
+
+  publish:
+    name: publish release
+    needs: [build, source-tarball]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Validate target allow-list
+        env:
+          ALLOWED: linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(dist/classroom-cli-*/*.tar.gz)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No per-target archives found." >&2
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            base="$(basename "$f")"
+            # Expect: classroom-cli_<target>.tar.gz
+            target="${base#classroom-cli_}"
+            target="${target%.tar.gz}"
+            case " $ALLOWED " in
+              *" $target "*) ;;
+              *) echo "Refusing to publish: target '$target' is not in the allow-list ($ALLOWED)" >&2; exit 1 ;;
+            esac
+            [[ -f "${f}.sha256" ]] || { echo "Missing checksum sidecar for $f" >&2; exit 1; }
+          done
+          echo "✔ All artifacts validated"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/classroom-cli-*/*.tar.gz
+            dist/classroom-cli-*/*.tar.gz.sha256
+            dist/classroom-cli-source/*.tar.gz
+            dist/classroom-cli-source/*.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
