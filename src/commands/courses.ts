@@ -4,11 +4,10 @@ import { emit, note } from '../../cli/agent/json-mode.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 
-function printCourseModern(c: any, full: boolean = false) {
-  console.log(`${pc.cyan('●')} ${pc.bold(c.name)}`);
-  
+import { printBlock, BlockItem } from '../ui.js';
+
+function getCourseBlock(c: any, full: boolean = false): BlockItem {
   const details: [string, string][] = [];
-  details.push(['ID', c.id]);
   if (c.courseState || full) details.push(['Status', c.courseState === 'ACTIVE' ? pc.green('ACTIVE') : pc.yellow(c.courseState || 'N/A')]);
   if (c.section || full) details.push(['Section', c.section || 'N/A']);
   if (c.subject || full) details.push(['Subject', c.subject || 'N/A']);
@@ -26,11 +25,7 @@ function printCourseModern(c: any, full: boolean = false) {
     if (c.calendarId) details.push(['Calendar ID', c.calendarId]);
   }
 
-  const maxLen = Math.max(...details.map(d => d[0].length));
-  for (const [k, v] of details) {
-    console.log(`  ${pc.dim((k + ':').padEnd(maxLen + 1))} ${v}`);
-  }
-  console.log('');
+  return { title: c.name, id: c.id, details };
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -48,10 +43,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
           console.log(pc.yellow('No active courses found.'));
           return;
         }
-        console.log(''); // Leading newline
-        for (const c of data.courses) {
-          printCourseModern(c, !!argv.full);
-        }
+        printBlock(data.courses.map((c: any) => getCourseBlock(c, !!argv.full)));
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to list courses' }, error);
@@ -66,8 +58,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const course = res.data;
       
       emit({ course }, globals, (data) => {
-        console.log('');
-        printCourseModern(data.course, !!argv.full);
+        printBlock([getCourseBlock(data.course, !!argv.full)]);
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to get course' }, error);
@@ -90,7 +81,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       
       emit({ course }, globals, (data) => {
         console.log(pc.green(`\n✔ Successfully created course:`));
-        printCourseModern(data.course, !!argv.full);
+        printBlock([getCourseBlock(data.course, !!argv.full)]);
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to create course' }, error);

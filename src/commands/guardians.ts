@@ -3,6 +3,7 @@ import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
+import { printBlock, BlockItem } from '../ui.js';
 
 export async function handleGuardians(verb: string | undefined, globals: GlobalFlags, argv: any) {
   const studentId = argv._[2];
@@ -17,11 +18,11 @@ export async function handleGuardians(verb: string | undefined, globals: GlobalF
         console.log(pc.yellow('No guardians found.')); 
         return; 
       }
-      console.log('');
-      for (const g of data.guardians) {
-        console.log(`${pc.cyan('●')} ${pc.bold(g.guardianProfile?.name?.fullName)} ${pc.dim(`(${g.guardianProfile?.emailAddress})`)}`);
-      }
-      console.log('');
+      printBlock(data.guardians.map((g: any) => ({
+        title: g.guardianProfile?.name?.fullName || 'Unknown',
+        id: g.guardianId,
+        details: [['Email', g.guardianProfile?.emailAddress || 'Unknown']]
+      })));
     });
   } else if (verb === 'invite') {
     const email = argv['email'];

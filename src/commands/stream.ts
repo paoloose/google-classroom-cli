@@ -3,6 +3,7 @@ import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
+import { printBlock, BlockItem } from '../ui.js';
 
 export async function handleStream(verb: string | undefined, globals: GlobalFlags, argv: any) {
   const courseId = argv._[2];
@@ -17,13 +18,16 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
         console.log(pc.yellow('No announcements found.')); 
         return; 
       }
-      console.log('');
-      for (const a of data.announcements) {
-        console.log(`${pc.cyan('●')} ${a.text}`);
-        console.log(`  ${pc.dim(`Posted: ${a.updateTime}`)}`);
-        if (a.alternateLink) console.log(`  ${pc.dim('Link:')} ${pc.blue(pc.underline(a.alternateLink))}`);
-        console.log('');
-      }
+      
+      printBlock(data.announcements.map((a: any) => {
+        const item: BlockItem = {
+          title: a.text,
+          id: a.id,
+          details: [['Posted', a.updateTime]]
+        };
+        if (a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+        return item;
+      }));
     });
   } else if (verb === 'post') {
     const text = argv['text'];

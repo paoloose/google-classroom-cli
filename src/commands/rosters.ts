@@ -4,6 +4,8 @@ import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 
+import { printBlock } from '../ui.js';
+
 export async function handleRoster(verb: string | undefined, globals: GlobalFlags, argv: any) {
   if (verb === 'list') {
     await handleRosterList(globals, argv);
@@ -40,12 +42,13 @@ async function handleRosterList(globals: GlobalFlags, argv: any) {
         console.log(pc.yellow(`No ${role}s found.`));
         return;
       }
-      console.log('');
-      for (const user of data.users) {
-        const p = user.profile;
-        console.log(`${pc.cyan('●')} ${pc.bold(p.name?.fullName)} ${pc.dim(`(${p.emailAddress})`)}`);
-      }
-      console.log('');
+      printBlock(data.users.map((user: any) => ({
+        title: user.profile?.name?.fullName || 'Unknown',
+        id: user.userId,
+        details: [
+          ['Email', user.profile?.emailAddress || 'Unknown']
+        ]
+      })));
     });
   } catch (error: any) {
     throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error);

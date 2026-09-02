@@ -3,6 +3,7 @@ import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
+import { printBlock, BlockItem } from '../ui.js';
 
 function parseDueDate(cw: any) {
   const d = cw.dueDate;
@@ -66,13 +67,15 @@ export async function handleTasksPending(globals: GlobalFlags, argv: any) {
         console.log(pc.green('✔ No pending tasks!')); 
         return; 
       }
-      console.log('');
-      for (const t of data.pendingTasks) {
-        console.log(`${pc.cyan('●')} ${pc.bold(t.courseWork.title)}`);
-        console.log(`  ${pc.dim('Course:')} ${t.course}`);
-        if (t.courseWork.alternateLink) console.log(`  ${pc.dim('Link:  ')} ${pc.blue(pc.underline(t.courseWork.alternateLink))}`);
-        console.log('');
-      }
+      printBlock(data.pendingTasks.map((t: any) => {
+        const item: BlockItem = {
+          title: t.courseWork.title,
+          id: t.courseWork.id,
+          details: [['Course', t.course]]
+        };
+        if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
+        return item;
+      }));
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
@@ -99,19 +102,24 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
         console.log(pc.green('✔ No tasks due in the next 7 days!')); 
         return; 
       }
-      console.log('');
-      for (const t of data.dueSoonTasks) {
+      
+      printBlock(data.dueSoonTasks.map((t: any) => {
         const tDate = parseDueDate(t.courseWork);
         const timeLeft = formatTimeLeft(tDate, now);
         const pad = (n: number) => n.toString().padStart(2, '0');
         const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
         
-        console.log(`${pc.cyan('●')} ${pc.bold(t.courseWork.title)}`);
-        console.log(`  ${pc.dim('Course:')} ${t.course}`);
-        console.log(`  ${pc.dim('Due:   ')} ${pc.yellow(`${localDateStr} (${timeLeft})`)}`);
-        if (t.courseWork.alternateLink) console.log(`  ${pc.dim('Link:  ')} ${pc.blue(pc.underline(t.courseWork.alternateLink))}`);
-        console.log('');
-      }
+        const item: BlockItem = {
+          title: t.courseWork.title,
+          id: t.courseWork.id,
+          details: [
+            ['Course', t.course],
+            ['Due', pc.yellow(`${localDateStr} (${timeLeft})`)]
+          ]
+        };
+        if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
+        return item;
+      }));
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
@@ -133,8 +141,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           console.log(pc.yellow('No coursework found.')); 
           return; 
         }
-        console.log('');
-        for (const cw of data.coursework) {
+        
+        printBlock(data.coursework.map((cw: any) => {
           let dueStr = 'No due date';
           if (cw.dueDate) {
             const tDate = parseDueDate(cw);
@@ -144,26 +152,31 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           }
           
           const stateColor = cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN');
-          console.log(`${pc.cyan('●')} ${pc.bold(cw.title)} ${pc.dim(`(${cw.id})`)}`);
-          console.log(`  ${pc.dim('State:')} ${stateColor}`);
-          console.log(`  ${pc.dim('Due:  ')} ${cw.dueDate ? pc.yellow(dueStr) : dueStr}`);
           
-          if (cw.alternateLink) console.log(`  ${pc.dim('Link: ')} ${pc.blue(pc.underline(cw.alternateLink))}`);
+          const item: BlockItem = {
+            title: cw.title,
+            id: cw.id,
+            details: [
+              ['State', stateColor],
+              ['Due', cw.dueDate ? pc.yellow(dueStr) : dueStr]
+            ]
+          };
+          if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
 
           if (cw.materials && cw.materials.length > 0) {
-            console.log(`  ${pc.dim('Attachments:')}`);
-            for (const att of cw.materials) {
+            item.attachments = cw.materials.map((att: any) => {
               if (att.driveFile?.driveFile) {
-                console.log(`    📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`);
+                return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
               } else if (att.link) {
-                console.log(`    🔗 ${pc.blue(pc.underline(att.link.url))}`);
+                return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
               } else if (att.youtubeVideo) {
-                console.log(`    ▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`);
+                return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
               }
-            }
+              return 'Unknown Attachment';
+            });
           }
-          console.log('');
-        }
+          return item;
+        }));
       });
     } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
   } else if (verb === 'create') {
@@ -190,17 +203,17 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
   if (verb === 'list') {
     const res = await classroom.courses.topics.list({ courseId });
     const topics = res.data.topic || [];
-    emit({ topics }, globals, (data) => {
-      if (data.topics.length === 0) {
-        console.log(pc.yellow('No topics found.'));
-        return;
-      }
-      console.log('');
-      for (const t of data.topics) {
-        console.log(`${pc.cyan('●')} ${pc.bold(t.name)} ${pc.dim(`(${t.topicId})`)}`);
-      }
-      console.log('');
-    });
+      emit({ topics }, globals, (data) => {
+        if (data.topics.length === 0) {
+          console.log(pc.yellow('No topics found.'));
+          return;
+        }
+        printBlock(data.topics.map((t: any) => ({
+          title: t.name,
+          id: t.topicId,
+          details: [['Updated', t.updateTime]]
+        })));
+      });
   } else if (verb === 'create') {
     const name = argv['name'];
     if (!name) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--name is required' });
@@ -224,27 +237,29 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           console.log(pc.yellow('No materials found.')); 
           return; 
         }
-        console.log('');
-        for (const m of data.materials) {
+        printBlock(data.materials.map((m: any) => {
           const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
-          console.log(`${pc.cyan('●')} ${pc.bold(m.title)} ${pc.dim(`(${m.id})`)}`);
-          console.log(`  ${pc.dim('State:')} ${stateColor}`);
-          if (m.alternateLink) console.log(`  ${pc.dim('Link: ')} ${pc.blue(pc.underline(m.alternateLink))}`);
+          const item: BlockItem = {
+            title: m.title,
+            id: m.id,
+            details: [['State', stateColor]]
+          };
+          if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
           
           if (m.materials && m.materials.length > 0) {
-            console.log(`  ${pc.dim('Attachments:')}`);
-            for (const att of m.materials) {
+            item.attachments = m.materials.map((att: any) => {
               if (att.driveFile?.driveFile) {
-                console.log(`    📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`);
+                return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
               } else if (att.link) {
-                console.log(`    🔗 ${pc.blue(pc.underline(att.link.url))}`);
+                return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
               } else if (att.youtubeVideo) {
-                console.log(`    ▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`);
+                return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
               }
-            }
+              return 'Unknown Attachment';
+            });
           }
-          console.log('');
-        }
+          return item;
+        }));
       });
   } else if (verb === 'create') {
     const title = argv['title'];
@@ -298,19 +313,23 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
         console.log(pc.yellow('No submissions found.')); 
         return; 
       }
-      console.log('');
-      for (const s of data.submissions) {
+      printBlock(data.submissions.map((s: any) => {
         const stateColor = s.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
                            s.state === 'RETURNED' ? pc.blue('RETURNED') : 
                            pc.yellow(s.state || 'UNKNOWN');
         const grade = s.draftGrade !== undefined ? s.draftGrade : (s.assignedGrade !== undefined ? s.assignedGrade : 'None');
         
-        console.log(`${pc.cyan('●')} ${pc.bold(`Student ${s.userId}`)}`);
-        console.log(`  ${pc.dim('State:')} ${stateColor}`);
-        console.log(`  ${pc.dim('Grade:')} ${grade}`);
-        if (s.alternateLink) console.log(`  ${pc.dim('Link: ')} ${pc.blue(pc.underline(s.alternateLink))}`);
-        console.log('');
-      }
+        const item: BlockItem = {
+          title: `Student ${s.userId}`,
+          id: s.id,
+          details: [
+            ['State', stateColor],
+            ['Grade', String(grade)]
+          ]
+        };
+        if (s.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(s.alternateLink))]);
+        return item;
+      }));
     });
   } else if (verb === 'grade') {
     const studentId = argv._[4];
