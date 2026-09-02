@@ -419,10 +419,13 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       printBlock(data.topics.map((t: any) => {
         const item: BlockItem = {
           title: t.name,
-          id: t.topicId
+          id: t.topicId,
+          details: [
+            ...(t.updateTime ? [['Updated', t.updateTime] as [string, string]] : [])
+          ]
         };
         if (isFull) {
-          item.details = [['Updated', t.updateTime]];
+          if (t.courseId) item.details!.unshift(['Course ID', t.courseId]);
         }
         if (shouldFetchRelated) {
           const relatedLines: string[] = [];
@@ -492,24 +495,45 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       files: extractAttachedFiles(m.materials, sizeMap)
     }));
 
+    const now = new Date();
     emit({ topic, coursework: enrichedCw, materials: enrichedMat }, globals, (data) => {
       if (shouldFetchRelated) console.log(pc.green(`\n✔ Topic:`));
-      const topicItem: BlockItem = { title: data.topic.name, id: data.topic.topicId };
-      if (isFull) topicItem.details = [['Updated', data.topic.updateTime]];
+      const topicItem: BlockItem = { 
+        title: data.topic.name, 
+        id: data.topic.topicId,
+        details: [
+          ...(data.topic.updateTime ? [['Updated', data.topic.updateTime] as [string, string]] : [])
+        ]
+      };
+      if (isFull) {
+        if (data.topic.courseId) topicItem.details!.unshift(['Course ID', data.topic.courseId]);
+      }
       printBlock([topicItem]);
       
       if (shouldFetchRelated) {
         if (data.materials.length > 0) {
           console.log(pc.green(`\n✔ Materials under this topic:`));
           printBlock(data.materials.map((m: any) => {
-            const item: BlockItem = { title: m.title, id: m.id };
+            const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
+            const item: BlockItem = { 
+              title: m.title, 
+              id: m.id,
+              details: [
+                ['State', stateColor],
+                ...(m.creationTime ? [['Created', m.creationTime] as [string, string]] : []),
+                ...(m.updateTime ? [['Updated', m.updateTime] as [string, string]] : []),
+                ...(m.alternateLink ? [['Link', pc.blue(pc.underline(m.alternateLink))] as [string, string]] : []),
+                ...(m.description ? [['Description', m.description] as [string, string]] : [])
+              ]
+            };
+            if (isFull) {
+              if (m.courseId) item.details!.push(['Course ID', m.courseId]);
+              if (m.topicId) item.details!.push(['Topic ID', m.topicId]);
+              if (m.creatorUserId) item.details!.push(['Creator ID', m.creatorUserId]);
+              if (m.scheduledTime) item.details!.push(['Scheduled', m.scheduledTime]);
+            }
             const atts = formatAttachments(m.materials, sizeMap);
             if (atts) item.attachments = atts;
-            
-            if (isFull) {
-              item.details = [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]];
-              if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-            }
             return item;
           }));
         } else {
@@ -519,14 +543,38 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
         if (data.coursework.length > 0) {
           console.log(pc.green(`\n✔ Assignments under this topic:`));
           printBlock(data.coursework.map((cw: any) => {
-            const item: BlockItem = { title: cw.title, id: cw.id };
+            let dueStr = 'No due date';
+            if (cw.dueDate) {
+              const tDate = parseDueDate(cw);
+              const pad = (n: number) => n.toString().padStart(2, '0');
+              const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+              dueStr = `${localDateStr} (${formatTimeLeft(tDate, now)})`;
+            }
+            const stateColor = cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN');
+            const item: BlockItem = { 
+              title: cw.title, 
+              id: cw.id,
+              details: [
+                ['State', stateColor],
+                ['Due', cw.dueDate ? pc.yellow(dueStr) : dueStr],
+                ...(cw.maxPoints !== undefined ? [['Max Points', String(cw.maxPoints)] as [string, string]] : []),
+                ...(cw.creationTime ? [['Created', cw.creationTime] as [string, string]] : []),
+                ...(cw.updateTime ? [['Updated', cw.updateTime] as [string, string]] : []),
+                ...(cw.alternateLink ? [['Link', pc.blue(pc.underline(cw.alternateLink))] as [string, string]] : []),
+                ...(cw.description ? [['Description', cw.description] as [string, string]] : [])
+              ]
+            };
+            if (isFull) {
+              if (cw.courseId) item.details!.push(['Course ID', cw.courseId]);
+              if (cw.workType) item.details!.push(['Type', cw.workType]);
+              if (cw.topicId) item.details!.push(['Topic ID', cw.topicId]);
+              if (cw.creatorUserId) item.details!.push(['Creator ID', cw.creatorUserId]);
+              if (cw.submissionModificationMode) item.details!.push(['Submission Mode', cw.submissionModificationMode]);
+              if (cw.assigneeMode) item.details!.push(['Assignee Mode', cw.assigneeMode]);
+              if (cw.scheduledTime) item.details!.push(['Scheduled', cw.scheduledTime]);
+            }
             const atts = formatAttachments(cw.materials, sizeMap);
             if (atts) item.attachments = atts;
-            
-            if (isFull) {
-              item.details = [['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')]];
-              if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
-            }
             return item;
           }));
         } else {
