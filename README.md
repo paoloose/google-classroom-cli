@@ -126,20 +126,21 @@ You may also use the environment variable `CLI_FROM`.
 
 Include only items dated within the last `<duration>` from now. This is a shortcut for `--from "<now - duration>"`.
 
-Format: `<n>y<n>m<n>d<n>h<n>m<n>s`
+Format: `<n>y<n>w<n>m<n>d<n>h<n>m<n>s`
 
 | Indicator | Meaning     |
 |-----------|-------------|
 | `y`       | years (365d)|
-| `m`       | months (30d)|
+| `w`       | weeks (7d)  |
+| `m`       | months (30d) — first `m` after a year/week is months|
 | `d`       | days        |
 | `h`       | hours       |
-| `m`       | minutes     |
+| `m`       | minutes — second `m` after hours is minutes|
 | `s`       | seconds     |
 
 - At least **one** indicator is required.
 - Each indicator may appear **at most once**.
-- Examples: `--last 7d`, `--last 24h`, `--last 1y2m3d`, `--last 30m`, `--last 1h30m` (invalid — minute indicator repeated).
+- Examples: `--last 7d`, `--last 24h`, `--last 1y2m3d`, `--last 30m`, `--last 1w2d`, `--last 1h30m` (invalid — minute indicator repeated).
 
 You may also use the environment variable `CLI_LAST`.
 

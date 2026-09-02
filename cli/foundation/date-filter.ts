@@ -34,8 +34,8 @@ import { AppError } from "./error-map.js";
 
 export type DateRange = { from?: Date; to?: Date };
 
-const DURATION_PATTERN = /^(?:(\d+)y)?(?:(\d+)m)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/;
-//                                                            ^ second "m" (minutes) lives here
+const DURATION_PATTERN = /^(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)m)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/;
+//                                  ^ first "m" = months; later "m" = minutes
 
 /**
  * Parse a free-form date string into a Date.
@@ -135,33 +135,35 @@ export function parseDuration(input: string): number {
     });
   }
 
-  const [, y, mo, d, h, mi, s] = match;
-  const parts = [y, mo, d, h, mi, s];
+  const [, y, w, mo, d, h, mi, s] = match;
+  const parts = [y, w, mo, d, h, mi, s];
   const present = parts.filter((p) => p !== undefined);
   if (present.length === 0) {
     throw new AppError("INVALID_DURATION", {
       name: "InvalidDuration",
-      human: `Duration must include at least one indicator (y/m/d/h/m/s). Got: "${input}"`,
+      human: `Duration must include at least one indicator (y/w/m/d/h/m/s). Got: "${input}"`,
     });
   }
 
   const years = y ? Number(y) : 0;
+  const weeks = w ? Number(w) : 0;
   const months = mo ? Number(mo) : 0;
   const days = d ? Number(d) : 0;
   const hours = h ? Number(h) : 0;
   const minutes = mi ? Number(mi) : 0;
   const seconds = s ? Number(s) : 0;
 
-  if ([years, months, days, hours, minutes, seconds].some((n) => n < 0)) {
+  if ([years, weeks, months, days, hours, minutes, seconds].some((n) => n < 0)) {
     throw new AppError("INVALID_DURATION", {
       name: "InvalidDuration",
       human: `Duration components must be non-negative: "${input}"`,
     });
   }
 
-  // Calendar-ish approximation: 30d/month, 365d/year.
+  // Calendar-ish approximation: 7d/week, 30d/month, 365d/year.
   const ms =
     years * 365 * 24 * 60 * 60 * 1000 +
+    weeks * 7 * 24 * 60 * 60 * 1000 +
     months * 30 * 24 * 60 * 60 * 1000 +
     days * 24 * 60 * 60 * 1000 +
     hours * 60 * 60 * 1000 +
