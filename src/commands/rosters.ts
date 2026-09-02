@@ -2,6 +2,7 @@ import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
+import pc from 'picocolors';
 
 export async function handleRoster(verb: string | undefined, globals: GlobalFlags, argv: any) {
   if (verb === 'list') {
@@ -19,27 +20,33 @@ async function handleRosterList(globals: GlobalFlags, argv: any) {
   const courseId = argv._[2];
   if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom roster list <course_id>' });
   
-  const role = argv['role'] || 'student'; // 'student' or 'teacher'
+  const role = argv['role'] === 'teacher' ? 'teacher' : 'student';
 
-  note(`Fetching roster for course ${courseId}...`, globals);
+  note(`Fetching ${role}s for course ${courseId}...`, globals);
   const classroom = await getClient();
   
   try {
+    const users: any[] = [];
     if (role === 'teacher') {
       const res = await classroom.courses.teachers.list({ courseId });
-      const teachers = res.data.teachers || [];
-      emit({ teachers }, globals, (data) => {
-        if (data.teachers.length === 0) { console.log('No teachers found.'); return; }
-        for (const t of data.teachers) { console.log(`- ${t.profile?.name?.fullName} (${t.profile?.emailAddress})`); }
-      });
+      if (res.data.teachers) users.push(...res.data.teachers);
     } else {
       const res = await classroom.courses.students.list({ courseId });
-      const students = res.data.students || [];
-      emit({ students }, globals, (data) => {
-        if (data.students.length === 0) { console.log('No students found.'); return; }
-        for (const s of data.students) { console.log(`- ${s.profile?.name?.fullName} (${s.profile?.emailAddress})`); }
-      });
+      if (res.data.students) users.push(...res.data.students);
     }
+    
+    emit({ users }, globals, (data) => {
+      if (data.users.length === 0) {
+        console.log(pc.yellow(`No ${role}s found.`));
+        return;
+      }
+      console.log('');
+      for (const user of data.users) {
+        const p = user.profile;
+        console.log(`${pc.cyan('●')} ${pc.bold(p.name?.fullName)} ${pc.dim(`(${p.emailAddress})`)}`);
+      }
+      console.log('');
+    });
   } catch (error: any) {
     throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error);
   }

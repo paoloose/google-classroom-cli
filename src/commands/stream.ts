@@ -2,6 +2,7 @@ import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
+import pc from 'picocolors';
 
 export async function handleStream(verb: string | undefined, globals: GlobalFlags, argv: any) {
   const courseId = argv._[2];
@@ -12,8 +13,17 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     const res = await classroom.courses.announcements.list({ courseId });
     const announcements = res.data.announcements || [];
     emit({ announcements }, globals, (data) => {
-      if (data.announcements.length === 0) { console.log('No announcements found.'); return; }
-      for (const a of data.announcements) console.log(`- ${a.text} (Updated: ${a.updateTime})`);
+      if (data.announcements.length === 0) { 
+        console.log(pc.yellow('No announcements found.')); 
+        return; 
+      }
+      console.log('');
+      for (const a of data.announcements) {
+        console.log(`${pc.cyan('●')} ${a.text}`);
+        console.log(`  ${pc.dim(`Posted: ${a.updateTime}`)}`);
+        if (a.alternateLink) console.log(`  ${pc.dim('Link:')} ${pc.blue(pc.underline(a.alternateLink))}`);
+        console.log('');
+      }
     });
   } else if (verb === 'post') {
     const text = argv['text'];
