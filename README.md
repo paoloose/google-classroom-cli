@@ -10,6 +10,52 @@ If you have the repository cloned, you can link it globally using `bun`:
 bun link
 ```
 
+## Agent Skills
+
+The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills) (`npx skills`). The skill teaches your agent the full feature surface — every command, every verb, the `--from`/`--last` filtering grammar, the `--full`/`--detailed` verbosity tiers, and the active-course-context resolver.
+
+### Install into a project
+
+From the repo root:
+
+```bash
+# Install into whichever agents are detected (Claude Code, Codex, Cursor, etc.)
+npx skills add ./skills
+
+# Or target a specific agent
+npx skills add ./skills -a claude-code -y
+npx skills add ./skills -a codex -y
+npx skills add ./skills -a command-code -y
+```
+
+This writes the skill to `./<agent>/skills/classroom/` so it can be committed with the project and shared with the team.
+
+### Install globally
+
+```bash
+npx skills add ./skills -g -a claude-code -y
+```
+
+The `-g` flag installs to `~/.<agent>/skills/classroom/` so the skill is available across every project.
+
+### Other useful commands
+
+```bash
+# Discover what the local source exposes
+npx skills add ./skills --list
+
+# Install just the classroom skill from any GitHub source
+npx skills add <owner>/<repo> --skill classroom -y
+
+# Keep it up to date
+npx skills update classroom
+
+# Remove it later
+npx skills remove classroom
+```
+
+Supported agents include Claude Code, Codex, Cursor, Command Code, OpenCode, GitHub Copilot, Gemini CLI, and 70+ others. Run `npx skills add ./skills` interactively to see which agents the CLI detects on your machine.
+
 ## Setup & Authentication
 
 Because this CLI interacts with Google Classroom, you need to provide your own Google Cloud OAuth credentials. **This is completely free and requires no credit card.**
