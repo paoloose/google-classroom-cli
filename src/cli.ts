@@ -49,8 +49,9 @@ async function main() {
     console.error('  stream post <id>      Post announcement (requires --text)');
     console.error('  work list <id>        List coursework');
     console.error('  work create <id>      Create an assignment (requires --title)');
-    console.error('  topic list <id>       List topics');
-    console.error('  topic create <id>     Create a topic (requires --name)');
+    console.error('  topic list <course_id>             List topics in a course');
+    console.error('  topic get <course_id> <topic_id>   View topic details, including its materials and assignments');
+    console.error('  topic create <course_id> --name=... Create a new topic');
     console.error('  material list <id>    List classwork materials');
     console.error('  material create <id>  Create material (requires --title, supports --file/--link)');
     console.error('  drive download <id>   Download a Drive file (optional --dest)');

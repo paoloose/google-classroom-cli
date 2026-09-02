@@ -214,6 +214,77 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
           details: [['Updated', t.updateTime]]
         })));
       });
+  } else if (verb === 'get') {
+    const topicId = argv._[3];
+    if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <course_id> <topic_id>' });
+    
+    note(`Fetching topic ${topicId}...`, globals);
+    const [topicRes, cwRes, matRes] = await Promise.all([
+      classroom.courses.topics.get({ courseId, id: topicId }),
+      classroom.courses.courseWork.list({ courseId }),
+      classroom.courses.courseWorkMaterials.list({ courseId })
+    ]);
+    
+    const topic = topicRes.data;
+    const coursework = (cwRes.data.courseWork || []).filter(cw => cw.topicId === topicId);
+    const materials = (matRes.data.courseWorkMaterial || []).filter(m => m.topicId === topicId);
+    
+    emit({ topic, coursework, materials }, globals, (data) => {
+      console.log(pc.green(`\n✔ Topic:`));
+      printBlock([{
+        title: data.topic.name,
+        id: data.topic.topicId,
+        details: [['Updated', data.topic.updateTime]]
+      }]);
+      
+      if (data.materials.length > 0) {
+        console.log(pc.green(`\n✔ Materials under this topic:`));
+        printBlock(data.materials.map((m: any) => {
+          const item: BlockItem = {
+            title: m.title,
+            id: m.id,
+            details: [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]]
+          };
+          if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+          
+          if (m.materials && m.materials.length > 0) {
+            item.attachments = m.materials.map((att: any) => {
+              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+              return 'Unknown Attachment';
+            });
+          }
+          return item;
+        }));
+      } else {
+        console.log(pc.dim('\nNo materials under this topic.'));
+      }
+      
+      if (data.coursework.length > 0) {
+        console.log(pc.green(`\n✔ Assignments under this topic:`));
+        printBlock(data.coursework.map((cw: any) => {
+          const item: BlockItem = {
+            title: cw.title,
+            id: cw.id,
+            details: [['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')]]
+          };
+          if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+          
+          if (cw.materials && cw.materials.length > 0) {
+            item.attachments = cw.materials.map((att: any) => {
+              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+              return 'Unknown Attachment';
+            });
+          }
+          return item;
+        }));
+      } else {
+        console.log(pc.dim('\nNo assignments under this topic.'));
+      }
+    });
   } else if (verb === 'create') {
     const name = argv['name'];
     if (!name) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--name is required' });
