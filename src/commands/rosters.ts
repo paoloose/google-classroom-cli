@@ -5,6 +5,7 @@ import { getClient } from '../client.js';
 import pc from 'picocolors';
 
 import { printBlock } from '../ui.js';
+import { resolveCourseId } from '../context.js';
 
 export async function handleRoster(verb: string | undefined, globals: GlobalFlags, argv: any) {
   if (verb === 'list') {
@@ -19,8 +20,7 @@ export async function handleRoster(verb: string | undefined, globals: GlobalFlag
 }
 
 async function handleRosterList(globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom roster list <course_id>' });
+  const courseId = resolveCourseId(argv._[2]);
   
   const role = argv['role'] === 'teacher' ? 'teacher' : 'student';
 
@@ -56,10 +56,9 @@ async function handleRosterList(globals: GlobalFlags, argv: any) {
 }
 
 async function handleRosterAdd(globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
+  const courseId = resolveCourseId(argv._[2]);
   const email = argv['email'];
   const role = argv['role'] || 'student';
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   if (!email) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--email is required' });
 
   note(`Adding ${email} to course ${courseId}...`, globals);
@@ -80,10 +79,9 @@ async function handleRosterAdd(globals: GlobalFlags, argv: any) {
 }
 
 async function handleRosterRemove(globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
+  const courseId = resolveCourseId(argv._[2]);
   const email = argv['email'];
   const role = argv['role'] || 'student';
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   if (!email) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--email is required' });
 
   note(`Removing ${email} from course ${courseId}...`, globals);

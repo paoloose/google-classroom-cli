@@ -1,13 +1,16 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
+import { parseDueDate } from '../date-utils.js';
+import { getActiveCourse, setActiveCourse, clearActiveCourse, resolveCourseId } from '../context.js';
 
-function getCourseBlock(c: any, full: boolean = false): BlockItem {
+function getCourseBlock(c: any, full: boolean = false, isSelected: boolean = false): BlockItem {
   const details: [string, string][] = [];
   if (c.courseState || full) details.push(['Status', c.courseState === 'ACTIVE' ? pc.green('ACTIVE') : pc.yellow(c.courseState || 'N/A')]);
   if (c.section || full) details.push(['Section', c.section || 'N/A']);
@@ -26,7 +29,8 @@ function getCourseBlock(c: any, full: boolean = false): BlockItem {
     if (c.calendarId) details.push(['Calendar ID', c.calendarId]);
   }
 
-  return { title: c.name, id: c.id, details };
+  const title = isSelected ? `${c.name} ${pc.green('(Selected)')}` : c.name;
+  return { title, id: c.id, details };
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -38,20 +42,22 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
         courseStates: ['ACTIVE'],
       });
       const activeCourses = res.data.courses || [];
+      const range = resolveDateRange(globals.from, globals.last);
+      const courses = applyDateFilter(activeCourses, range, (c: any) => c.updateTime || c.creationTime);
+      const active = getActiveCourse();
       
-      emit({ courses: activeCourses }, globals, (data) => {
+      emit({ courses }, globals, (data) => {
         if (data.courses.length === 0) {
           console.log(pc.yellow('No active courses found.'));
           return;
         }
-        printBlock(data.courses.map((c: any) => getCourseBlock(c, !!argv.full)));
+        printBlock(data.courses.map((c: any) => getCourseBlock(c, !!argv.full, active?.id === c.id)));
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to list courses' }, error);
     }
   } else if (verb === 'get') {
-    const id = argv._[2];
-    if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course get <id>' });
+    const id = resolveCourseId(argv._[2]);
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
@@ -74,10 +80,16 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const materials = matRes.data.courseWorkMaterial || [];
       const stream = streamRes.data.announcements || [];
       
-      const fileIds = shouldFetchRelated ? extractDriveFileIds([coursework, materials, stream]) : [];
+      const range = resolveDateRange(globals.from, globals.last);
+      const filteredTopics = applyDateFilter(topics, range, (t: any) => t.updateTime);
+      const filteredCoursework = applyDateFilter(coursework, range, (cw: any) => cw.dueDate ? parseDueDate(cw) : cw.updateTime);
+      const filteredMaterials = applyDateFilter(materials, range, (m: any) => m.updateTime);
+      const filteredStream = applyDateFilter(stream, range, (a: any) => a.updateTime);
+      
+      const fileIds = shouldFetchRelated ? extractDriveFileIds([filteredCoursework, filteredMaterials, filteredStream]) : [];
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
-      emit({ course, teachers, topics, coursework, materials, stream }, globals, (data) => {
+      emit({ course, teachers, topics: filteredTopics, coursework: filteredCoursework, materials: filteredMaterials, stream: filteredStream }, globals, (data) => {
         if (shouldFetchRelated) console.log(pc.green(`\n✔ Course Details:`));
         const courseBlock = getCourseBlock(data.course, isFull);
         
@@ -215,6 +227,80 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to update course' }, error);
     }
+  } else if (verb === 'select') {
+    const explicitId = argv._[2];
+    if (explicitId) {
+      note(`Verifying course ${explicitId}...`, globals);
+      const res = await classroom.courses.get({ id: explicitId });
+      const c = res.data;
+      const active = setActiveCourse({ id: c.id!, name: c.name!, section: c.section || undefined });
+      emit({ selected: active }, globals, () => {
+        console.log(pc.green(`✔ Selected course: ${active.name} (ID: ${active.id})`));
+      });
+      return;
+    }
+
+    if (globals.json) {
+      throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required in JSON mode', hint: 'classroom course select <id>' });
+    }
+
+    note('Fetching active courses...', globals);
+    const res = await classroom.courses.list({ courseStates: ['ACTIVE'] });
+    const courses = res.data.courses || [];
+    if (courses.length === 0) {
+      console.log(pc.yellow('No active courses found to select.'));
+      return;
+    }
+
+    const { select, isCancel, cancel } = await import('@clack/prompts');
+    const options = courses.map((c: any) => ({
+      value: c.id!,
+      label: `${c.name}${c.section ? ` · ${c.section}` : ''}`,
+      hint: `ID: ${c.id}`
+    }));
+
+    const selectedId = await select({
+      message: 'Select a course to set as active context:',
+      options
+    });
+
+    if (isCancel(selectedId)) {
+      cancel('Selection cancelled.');
+      return;
+    }
+
+    const chosen = courses.find((c: any) => c.id === selectedId);
+    if (!chosen) return;
+    const active = setActiveCourse({ id: chosen.id!, name: chosen.name!, section: chosen.section || undefined });
+    emit({ selected: active }, globals, () => {
+      console.log(pc.green(`✔ Selected course: ${active.name} (ID: ${active.id})`));
+    });
+  } else if (verb === 'deselect') {
+    const hadSelection = clearActiveCourse();
+    emit({ success: true, cleared: hadSelection }, globals, () => {
+      if (hadSelection) {
+        console.log(pc.green('✔ Cleared course selection.'));
+      } else {
+        console.log(pc.yellow('No course was currently selected.'));
+      }
+    });
+  } else if (verb === 'current') {
+    const active = getActiveCourse();
+    emit({ activeCourse: active }, globals, (data) => {
+      if (!data.activeCourse) {
+        console.log(pc.yellow('No course currently selected. Run `classroom course select` to select one.'));
+        return;
+      }
+      console.log(pc.green(`✔ Current Selected Course:`));
+      printBlock([{
+        title: data.activeCourse.name,
+        id: data.activeCourse.id,
+        details: [
+          ...(data.activeCourse.section ? [['Section', data.activeCourse.section] as [string, string]] : []),
+          ['Selected At', data.activeCourse.selectedAt]
+        ]
+      }]);
+    });
   } else {
     throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown course verb: ${verb}` });
   }

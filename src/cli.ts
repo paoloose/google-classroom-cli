@@ -68,12 +68,15 @@ async function main() {
       
       printCategory('Courses & Rosters', [
         ['course list', 'List active courses'],
-        ['course get <id>', 'Get details of a course (use --related to see topics/teachers)'],
+        ['course select [id]', 'Select active course context (interactive TUI if no id)'],
+        ['course deselect', 'Clear active course context'],
+        ['course current', 'Show currently selected course'],
+        ['course get [id]', 'Get details of a course (defaults to selected course)'],
         ['course create', 'Create a course (requires --name)'],
-        ['course update <id>', 'Update a course status (requires --status)'],
-        ['roster list <id>', 'List students (or use --role=teacher)'],
-        ['roster add <id>', 'Add a user (requires --email, optional --role=teacher)'],
-        ['roster remove <id>', 'Remove a user (requires --email)']
+        ['course update [id]', 'Update a course status (requires --status)'],
+        ['roster list [id]', 'List students (or use --role=teacher)'],
+        ['roster add [id]', 'Add a user (requires --email, optional --role=teacher)'],
+        ['roster remove [id]', 'Remove a user (requires --email)']
       ]);
       
       printCategory('Coursework & Content', [

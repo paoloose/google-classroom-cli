@@ -6,13 +6,13 @@ import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
+import { resolveCourseId } from '../context.js';
 
 export async function handleStream(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   const classroom = await getClient();
 
   if (verb === 'list') {
+    const courseId = resolveCourseId(argv._[2]);
     const res = await classroom.courses.announcements.list({ courseId });
     const raw = res.data.announcements || [];
     const range = resolveDateRange(globals.from, globals.last);
@@ -46,8 +46,16 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
       }));
     });
   } else if (verb === 'get') {
-    const id = argv._[3];
-    if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Announcement ID is required', hint: 'classroom stream get <course_id> <announcement_id>' });
+    let courseId: string;
+    let id: string;
+    if (argv._[3]) {
+      courseId = argv._[2];
+      id = argv._[3];
+    } else {
+      courseId = resolveCourseId(undefined);
+      id = argv._[2];
+    }
+    if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Announcement ID is required', hint: 'classroom stream get <announcement_id>' });
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
@@ -78,6 +86,7 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
       printBlock([item]);
     });
   } else if (verb === 'post') {
+    const courseId = resolveCourseId(argv._[2]);
     const text = argv['text'];
     const scheduled = argv['scheduled'];
     if (!text) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--text is required' });

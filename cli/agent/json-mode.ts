@@ -102,6 +102,9 @@ export function reportError(
 
   const prefix = shouldColor() ? pc.red("✗") : "✗";
   process.stderr.write(`${prefix} ${message}\n`);
+  if ((error as any).hint) {
+    process.stderr.write(`${pc.dim(`  Hint: ${(error as any).hint}`)}\n`);
+  }
   if (stack && process.env.DEBUG) {
     process.stderr.write(`${shouldColor() ? pc.dim(stack) : stack}\n`);
   }

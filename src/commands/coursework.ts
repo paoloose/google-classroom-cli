@@ -7,6 +7,7 @@ import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
+import { resolveCourseId } from '../context.js';
 
 async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
@@ -172,11 +173,10 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
 
 export async function handleCourseWork(globals: GlobalFlags, argv: any) {
   const verb = argv._[1];
-  const id = argv._[2];
-  if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   const classroom = await getClient();
   
   if (verb === 'list') {
+    const id = resolveCourseId(argv._[2]);
     note(`Fetching coursework for course ${id}...`, globals);
     try {
       const res = await classroom.courses.courseWork.list({ courseId: id });
@@ -231,8 +231,16 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       });
     } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
   } else if (verb === 'get') {
-    const workId = argv._[3];
-    if (!workId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID is required', hint: 'classroom work get <course_id> <work_id>' });
+    let courseId: string;
+    let workId: string;
+    if (argv._[3]) {
+      courseId = argv._[2];
+      workId = argv._[3];
+    } else {
+      courseId = resolveCourseId(undefined);
+      workId = argv._[2];
+    }
+    if (!workId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID is required', hint: 'classroom work get <work_id>' });
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
@@ -240,8 +248,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
     note(shouldFetchRelated ? `Fetching coursework ${workId} and its submissions...` : `Fetching coursework ${workId}...`, globals);
     try {
       const [cwRes, subRes] = await Promise.all([
-        classroom.courses.courseWork.get({ courseId: id, id: workId }),
-        shouldFetchRelated ? classroom.courses.courseWork.studentSubmissions.list({ courseId: id, courseWorkId: workId, userId: 'me' }).catch(() => ({ data: { studentSubmissions: [] } })) : Promise.resolve({ data: { studentSubmissions: [] } })
+        classroom.courses.courseWork.get({ courseId, id: workId }),
+        shouldFetchRelated ? classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId: workId, userId: 'me' }).catch(() => ({ data: { studentSubmissions: [] } })) : Promise.resolve({ data: { studentSubmissions: [] } })
       ]);
       
       const cw = cwRes.data;
@@ -316,6 +324,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       });
     } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
   } else if (verb === 'create') {
+    const id = resolveCourseId(argv._[2]);
     const title = argv['title'];
     if (!title) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--title is required' });
     
@@ -332,11 +341,10 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
 }
 
 export async function handleTopic(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   const classroom = await getClient();
 
   if (verb === 'list') {
+    const courseId = resolveCourseId(argv._[2]);
     const res = await classroom.courses.topics.list({ courseId });
     const raw = res.data.topic || [];
     const range = resolveDateRange(globals.from, globals.last);
@@ -360,8 +368,16 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       }));
     });
   } else if (verb === 'get') {
-    const topicId = argv._[3];
-    if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <course_id> <topic_id>' });
+    let courseId: string;
+    let topicId: string;
+    if (argv._[3]) {
+      courseId = argv._[2];
+      topicId = argv._[3];
+    } else {
+      courseId = resolveCourseId(undefined);
+      topicId = argv._[2];
+    }
+    if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <topic_id>' });
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
@@ -426,6 +442,7 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       }
     });
   } else if (verb === 'create') {
+    const courseId = resolveCourseId(argv._[2]);
     const name = argv['name'];
     if (!name) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--name is required' });
     const res = await classroom.courses.topics.create({ courseId, requestBody: { name } });
@@ -436,11 +453,10 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
 }
 
 export async function handleMaterial(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  if (!courseId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required' });
   const classroom = await getClient();
 
   if (verb === 'list') {
+    const courseId = resolveCourseId(argv._[2]);
     const res = await classroom.courses.courseWorkMaterials.list({ courseId });
     const raw = res.data.courseWorkMaterial || [];
     const range = resolveDateRange(globals.from, globals.last);
@@ -474,8 +490,16 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
       }));
     });
   } else if (verb === 'get') {
-    const materialId = argv._[3];
-    if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <course_id> <material_id>' });
+    let courseId: string;
+    let materialId: string;
+    if (argv._[3]) {
+      courseId = argv._[2];
+      materialId = argv._[3];
+    } else {
+      courseId = resolveCourseId(undefined);
+      materialId = argv._[2];
+    }
+    if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <material_id>' });
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
@@ -507,6 +531,7 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
       printBlock([item]);
     });
   } else if (verb === 'create') {
+    const courseId = resolveCourseId(argv._[2]);
     const title = argv['title'];
     const topicId = argv['topic'];
     const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
@@ -545,12 +570,20 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
 }
 
 export async function handleSubmissions(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  const courseWorkId = argv._[3];
-  if (!courseId || !courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID and CourseWork ID are required' });
   const classroom = await getClient();
 
   if (verb === 'list') {
+    let courseId: string;
+    let courseWorkId: string;
+    if (argv._[3]) {
+      courseId = argv._[2];
+      courseWorkId = argv._[3];
+    } else {
+      courseId = resolveCourseId(undefined);
+      courseWorkId = argv._[2];
+    }
+    if (!courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'CourseWork ID is required', hint: 'classroom submissions list <work_id>' });
+    
     const res = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId });
     const raw = res.data.studentSubmissions || [];
     const range = resolveDateRange(globals.from, globals.last);
@@ -590,9 +623,20 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
       }));
     });
   } else if (verb === 'grade') {
-    const studentId = argv._[4];
+    let courseId: string;
+    let courseWorkId: string;
+    let studentId: string;
+    if (argv._[4]) {
+      courseId = argv._[2];
+      courseWorkId = argv._[3];
+      studentId = argv._[4];
+    } else {
+      courseId = resolveCourseId(undefined);
+      courseWorkId = argv._[2];
+      studentId = argv._[3];
+    }
     const score = argv['score'];
-    if (!studentId || score === undefined) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Student ID and --score are required' });
+    if (!courseWorkId || !studentId || score === undefined) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID, Student ID and --score are required' });
     
     // Need submission ID for patching grade
     const subRes = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId, userId: studentId });
@@ -605,8 +649,19 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
     });
     emit({ submission: res.data }, globals, () => console.log(`Graded student ${studentId} with score ${score}`));
   } else if (verb === 'return') {
-    const studentId = argv._[4];
-    if (!studentId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Student ID is required' });
+    let courseId: string;
+    let courseWorkId: string;
+    let studentId: string;
+    if (argv._[4]) {
+      courseId = argv._[2];
+      courseWorkId = argv._[3];
+      studentId = argv._[4];
+    } else {
+      courseId = resolveCourseId(undefined);
+      courseWorkId = argv._[2];
+      studentId = argv._[3];
+    }
+    if (!courseWorkId || !studentId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID and Student ID are required' });
     const subRes = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId, userId: studentId });
     const submission = subRes.data.studentSubmissions?.[0];
     if (!submission) throw new AppError('NOT_FOUND', { name: 'NotFound', human: 'Submission not found' });
@@ -619,9 +674,16 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
 }
 
 export async function handleStudentAction(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  const courseId = argv._[2];
-  const courseWorkId = argv._[3];
-  if (!courseId || !courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID and CourseWork ID are required' });
+  let courseId: string;
+  let courseWorkId: string;
+  if (argv._[3]) {
+    courseId = argv._[2];
+    courseWorkId = argv._[3];
+  } else {
+    courseId = resolveCourseId(undefined);
+    courseWorkId = argv._[2];
+  }
+  if (!courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'CourseWork ID is required' });
   const classroom = await getClient();
 
   // Find the student's submission id
