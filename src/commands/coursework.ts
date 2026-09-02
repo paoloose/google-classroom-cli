@@ -4,6 +4,7 @@ import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
+import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
 
 function parseDueDate(cw: any) {
   const d = cw.dueDate;
@@ -136,6 +137,9 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const res = await classroom.courses.courseWork.list({ courseId: id });
       const coursework = res.data.courseWork || [];
       const now = new Date();
+      const fileIds = extractDriveFileIds(coursework);
+      const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+      
       emit({ coursework }, globals, (data) => {
         if (data.coursework.length === 0) { 
           console.log(pc.yellow('No coursework found.')); 
@@ -163,18 +167,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           };
           if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
 
-          if (cw.materials && cw.materials.length > 0) {
-            item.attachments = cw.materials.map((att: any) => {
-              if (att.driveFile?.driveFile) {
-                return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
-              } else if (att.link) {
-                return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              } else if (att.youtubeVideo) {
-                return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
-              }
-              return 'Unknown Attachment';
-            });
-          }
+          const atts = formatAttachments(cw.materials, sizeMap);
+          if (atts) item.attachments = atts;
           return item;
         }));
       });
@@ -197,6 +191,9 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const submission = subRes.data.studentSubmissions?.[0];
       const now = new Date();
       
+      const fileIds = extractDriveFileIds([cw, submission]);
+      const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+      
       emit({ coursework: cw, submission }, globals, (data) => {
         if (shouldFetchRelated) console.log(pc.green(`\n✔ Assignment Details:`));
         
@@ -215,17 +212,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           id: data.coursework.id
         };
         
-        const extractAtts = (mats: any[]) => {
-          if (!mats || mats.length === 0) return undefined;
-          return mats.map((att: any) => {
-            if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
-            if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-            if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-            return 'Unknown Attachment';
-          });
-        };
-
-        const atts = extractAtts(data.coursework.materials);
+        const atts = formatAttachments(data.coursework.materials, sizeMap);
         if (atts) item.attachments = atts;
         
         if (isFull) {
@@ -246,13 +233,9 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             id: data.submission.id
           };
           
-          if (data.submission.assignmentSubmission?.attachments) {
-            subItem.attachments = data.submission.assignmentSubmission.attachments.map((att: any) => {
-              if (att.driveFile) return `📄 ${att.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.id})`)}`;
-              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-              return 'Unknown Attachment';
-            });
+          const subAtts = formatAttachments(data.submission.assignmentSubmission?.attachments, sizeMap);
+          if (subAtts && subAtts.length > 0) {
+            subItem.attachments = subAtts;
           } else {
             subItem.attachments = [pc.dim('No files attached.')];
           }
@@ -324,6 +307,9 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     const coursework = (cwRes.data.courseWork || []).filter(cw => cw.topicId === topicId);
     const materials = (matRes.data.courseWorkMaterial || []).filter(m => m.topicId === topicId);
     
+    const fileIds = shouldFetchRelated ? extractDriveFileIds([coursework, materials]) : [];
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    
     emit({ topic, coursework, materials }, globals, (data) => {
       if (shouldFetchRelated) console.log(pc.green(`\n✔ Topic:`));
       const topicItem: BlockItem = { title: data.topic.name, id: data.topic.topicId };
@@ -331,21 +317,11 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       printBlock([topicItem]);
       
       if (shouldFetchRelated) {
-        const extractAtts = (mats: any[]) => {
-          if (!mats || mats.length === 0) return undefined;
-          return mats.map((att: any) => {
-            if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-            if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-            if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-            return 'Unknown Attachment';
-          });
-        };
-
         if (data.materials.length > 0) {
           console.log(pc.green(`\n✔ Materials under this topic:`));
           printBlock(data.materials.map((m: any) => {
             const item: BlockItem = { title: m.title, id: m.id };
-            const atts = extractAtts(m.materials);
+            const atts = formatAttachments(m.materials, sizeMap);
             if (atts) item.attachments = atts;
             
             if (isFull) {
@@ -362,7 +338,7 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
           console.log(pc.green(`\n✔ Assignments under this topic:`));
           printBlock(data.coursework.map((cw: any) => {
             const item: BlockItem = { title: cw.title, id: cw.id };
-            const atts = extractAtts(cw.materials);
+            const atts = formatAttachments(cw.materials, sizeMap);
             if (atts) item.attachments = atts;
             
             if (isFull) {
@@ -394,61 +370,52 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
   if (verb === 'list') {
     const res = await classroom.courses.courseWorkMaterials.list({ courseId });
     const materials = res.data.courseWorkMaterial || [];
-      emit({ materials }, globals, (data) => {
-        if (data.materials.length === 0) { 
-          console.log(pc.yellow('No materials found.')); 
-          return; 
-        }
-        printBlock(data.materials.map((m: any) => {
-          const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
-          const item: BlockItem = {
-            title: m.title,
-            id: m.id,
-            details: [['State', stateColor]]
-          };
-          if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-          
-          if (m.materials && m.materials.length > 0) {
-            item.attachments = m.materials.map((att: any) => {
-              if (att.driveFile?.driveFile) {
-                return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
-              } else if (att.link) {
-                return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              } else if (att.youtubeVideo) {
-                return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
-              }
-              return 'Unknown Attachment';
-            });
-          }
-          return item;
-        }));
-      });
+    const fileIds = extractDriveFileIds(materials);
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    
+    emit({ materials }, globals, (data) => {
+      if (data.materials.length === 0) { 
+        console.log(pc.yellow('No materials found.')); 
+        return; 
+      }
+      printBlock(data.materials.map((m: any) => {
+        const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
+        const item: BlockItem = {
+          title: m.title,
+          id: m.id,
+          details: [['State', stateColor]]
+        };
+        if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+        
+        const atts = formatAttachments(m.materials, sizeMap);
+        if (atts) item.attachments = atts;
+        return item;
+      }));
+    });
   } else if (verb === 'get') {
     const materialId = argv._[3];
     if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <course_id> <material_id>' });
     
     note(`Fetching material ${materialId}...`, globals);
     const res = await classroom.courses.courseWorkMaterials.get({ courseId, id: materialId });
-    emit({ material: res.data }, globals, (data) => {
+    const m = res.data;
+    const fileIds = extractDriveFileIds([m]);
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    
+    emit({ material: m }, globals, (data) => {
       console.log(pc.green(`\n✔ Material Details:`));
-      const m = data.material;
-      const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
+      const mat = data.material;
+      const stateColor = mat.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(mat.state || 'UNKNOWN');
       const item: BlockItem = {
-        title: m.title,
-        id: m.id,
+        title: mat.title,
+        id: mat.id,
         details: [['State', stateColor]]
       };
-      if (m.description) item.details!.push(['Description', m.description.split('\n')[0] + (m.description.includes('\n') ? '...' : '')]);
-      if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+      if (mat.description) item.details!.push(['Description', mat.description.split('\n')[0] + (mat.description.includes('\n') ? '...' : '')]);
+      if (mat.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(mat.alternateLink))]);
       
-      if (m.materials && m.materials.length > 0) {
-        item.attachments = m.materials.map((att: any) => {
-          if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
-          if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-          if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
-          return 'Unknown Attachment';
-        });
-      }
+      const atts = formatAttachments(mat.materials, sizeMap);
+      if (atts) item.attachments = atts;
       printBlock([item]);
     });
   } else if (verb === 'create') {
@@ -498,6 +465,9 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
   if (verb === 'list') {
     const res = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId });
     const submissions = res.data.studentSubmissions || [];
+    const fileIds = extractDriveFileIds(submissions);
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    
     emit({ submissions }, globals, (data) => {
       if (data.submissions.length === 0) { 
         console.log(pc.yellow('No submissions found.')); 
@@ -518,6 +488,8 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
           ]
         };
         if (s.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(s.alternateLink))]);
+        const atts = formatAttachments(s.assignmentSubmission?.attachments, sizeMap);
+        if (atts && atts.length > 0) item.attachments = atts;
         return item;
       }));
     });

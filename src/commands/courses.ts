@@ -5,6 +5,7 @@ import { getClient } from '../client.js';
 import pc from 'picocolors';
 
 import { printBlock, BlockItem } from '../ui.js';
+import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
 
 function getCourseBlock(c: any, full: boolean = false): BlockItem {
   const details: [string, string][] = [];
@@ -73,6 +74,9 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const materials = matRes.data.courseWorkMaterial || [];
       const stream = streamRes.data.announcements || [];
       
+      const fileIds = shouldFetchRelated ? extractDriveFileIds([coursework, materials, stream]) : [];
+      const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+      
       emit({ course, teachers, topics, coursework, materials, stream }, globals, (data) => {
         if (shouldFetchRelated) console.log(pc.green(`\n✔ Course Details:`));
         const courseBlock = getCourseBlock(data.course, isFull);
@@ -90,16 +94,6 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
         printBlock([courseBlock]);
         
         if (shouldFetchRelated) {
-          const extractAtts = (mats: any[]) => {
-            if (!mats || mats.length === 0) return undefined;
-            return mats.map((att: any) => {
-              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-              return 'Unknown Attachment';
-            });
-          };
-
           if (data.topics.length > 0) {
             console.log(pc.green(`✔ Topics:`));
             printBlock(data.topics.map((t: any) => {
@@ -108,11 +102,11 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
               
               const topicAtts: string[] = [];
               data.coursework.filter((cw: any) => cw.topicId === t.topicId).forEach((cw: any) => {
-                const atts = extractAtts(cw.materials);
+                const atts = formatAttachments(cw.materials, sizeMap);
                 if (atts) topicAtts.push(...atts);
               });
               data.materials.filter((m: any) => m.topicId === t.topicId).forEach((m: any) => {
-                const atts = extractAtts(m.materials);
+                const atts = formatAttachments(m.materials, sizeMap);
                 if (atts) topicAtts.push(...atts);
               });
               if (topicAtts.length > 0) item.attachments = topicAtts;
@@ -125,7 +119,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Assignments:`));
             printBlock(data.coursework.map((cw: any) => {
               const item: BlockItem = { title: cw.title, id: cw.id };
-              const atts = extractAtts(cw.materials);
+              const atts = formatAttachments(cw.materials, sizeMap);
               if (atts) item.attachments = atts;
               
               if (isFull) {
@@ -143,7 +137,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Materials:`));
             printBlock(data.materials.map((m: any) => {
               const item: BlockItem = { title: m.title, id: m.id };
-              const atts = extractAtts(m.materials);
+              const atts = formatAttachments(m.materials, sizeMap);
               if (atts) item.attachments = atts;
               
               if (isFull) {
@@ -158,7 +152,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Stream Announcements:`));
             printBlock(data.stream.map((a: any) => {
               const item: BlockItem = { title: a.text.split('\n')[0].substring(0, 50) + (a.text.length > 50 ? '...' : ''), id: a.id };
-              const atts = extractAtts(a.materials);
+              const atts = formatAttachments(a.materials, sizeMap);
               if (atts) item.attachments = atts;
               
               if (isFull) {

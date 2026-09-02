@@ -13,7 +13,6 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.4.1",
-    "@types/prettyjson": "^0.0.33",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },
@@ -22,8 +21,7 @@
   },
   "dependencies": {
     "googleapis": "^178.0.0",
-    "picocolors": "^1.1.1",
-    "prettyjson": "^1.2.5"
+    "picocolors": "^1.1.1"
   },
   "bin": {
     "classroom": "src/cli.ts"
