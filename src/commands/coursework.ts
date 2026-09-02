@@ -279,7 +279,12 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           id: data.coursework.id,
           details: [
             ['State', stateColor],
-            ['Due', data.coursework.dueDate ? pc.yellow(dueStr) : dueStr]
+            ['Due', data.coursework.dueDate ? pc.yellow(dueStr) : dueStr],
+            ...(data.coursework.maxPoints !== undefined ? [['Max Points', String(data.coursework.maxPoints)] as [string, string]] : []),
+            ...(data.coursework.creationTime ? [['Created', data.coursework.creationTime] as [string, string]] : []),
+            ...(data.coursework.updateTime ? [['Updated', data.coursework.updateTime] as [string, string]] : []),
+            ...(data.coursework.alternateLink ? [['Link', pc.blue(pc.underline(data.coursework.alternateLink))] as [string, string]] : []),
+            ...(data.coursework.description ? [['Description', data.coursework.description] as [string, string]] : [])
           ]
         };
         
@@ -288,14 +293,9 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           if (data.coursework.workType) item.details!.push(['Type', data.coursework.workType]);
           if (data.coursework.topicId) item.details!.push(['Topic ID', data.coursework.topicId]);
           if (data.coursework.creatorUserId) item.details!.push(['Creator ID', data.coursework.creatorUserId]);
-          if (data.coursework.maxPoints !== undefined) item.details!.push(['Max Points', String(data.coursework.maxPoints)]);
           if (data.coursework.submissionModificationMode) item.details!.push(['Submission Mode', data.coursework.submissionModificationMode]);
           if (data.coursework.assigneeMode) item.details!.push(['Assignee Mode', data.coursework.assigneeMode]);
-          if (data.coursework.creationTime) item.details!.push(['Created', data.coursework.creationTime]);
-          if (data.coursework.updateTime) item.details!.push(['Updated', data.coursework.updateTime]);
           if (data.coursework.scheduledTime) item.details!.push(['Scheduled', data.coursework.scheduledTime]);
-          if (data.coursework.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
-          if (data.coursework.description) item.details!.push(['Description', data.coursework.description]);
         }
 
         if (shouldFetchRelated) {
@@ -537,17 +537,19 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
       const item: BlockItem = {
         title: mat.title,
         id: mat.id,
-        details: [['State', stateColor]]
+        details: [
+          ['State', stateColor],
+          ...(mat.creationTime ? [['Created', mat.creationTime] as [string, string]] : []),
+          ...(mat.updateTime ? [['Updated', mat.updateTime] as [string, string]] : []),
+          ...(mat.alternateLink ? [['Link', pc.blue(pc.underline(mat.alternateLink))] as [string, string]] : []),
+          ...(mat.description ? [['Description', mat.description] as [string, string]] : [])
+        ]
       };
       if (isFull) {
         if (mat.courseId) item.details!.push(['Course ID', mat.courseId]);
         if (mat.topicId) item.details!.push(['Topic ID', mat.topicId]);
         if (mat.creatorUserId) item.details!.push(['Creator ID', mat.creatorUserId]);
-        if (mat.creationTime) item.details!.push(['Created', mat.creationTime]);
-        if (mat.updateTime) item.details!.push(['Updated', mat.updateTime]);
         if (mat.scheduledTime) item.details!.push(['Scheduled', mat.scheduledTime]);
-        if (mat.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(mat.alternateLink))]);
-        if (mat.description) item.details!.push(['Description', mat.description]);
       }
       
       if (shouldFetchRelated) {

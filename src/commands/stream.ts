@@ -73,16 +73,16 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
         id: a.id,
         details: [
           ['State', a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN')],
-          ['Posted', a.updateTime]
+          ['Posted', a.updateTime || a.creationTime],
+          ...(a.creationTime && a.updateTime && a.creationTime !== a.updateTime ? [['Created', a.creationTime] as [string, string]] : []),
+          ...(a.alternateLink ? [['Link', pc.blue(pc.underline(a.alternateLink))] as [string, string]] : [])
         ]
       };
       if (isFull) {
         if (a.courseId) item.details!.push(['Course ID', a.courseId]);
         if (a.creatorUserId) item.details!.push(['Creator ID', a.creatorUserId]);
-        if (a.creationTime) item.details!.push(['Created', a.creationTime]);
         if (a.scheduledTime) item.details!.push(['Scheduled', a.scheduledTime]);
         if (a.assigneeMode) item.details!.push(['Assignee Mode', a.assigneeMode]);
-        if (a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
       }
       
       if (shouldFetchRelated) {
