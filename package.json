@@ -13,6 +13,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.4.1",
+    "@types/prettyjson": "^0.0.33",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },
@@ -20,10 +21,9 @@
     "@cligentic": "https://cligentic.railly.dev/r/{name}.json"
   },
   "dependencies": {
-    "cli-highlight": "^2.1.11",
     "googleapis": "^178.0.0",
-    "js-yaml": "^5.4.1",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "prettyjson": "^1.2.5"
   },
   "bin": {
     "classroom": "src/cli.ts"

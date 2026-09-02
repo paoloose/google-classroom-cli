@@ -2,13 +2,16 @@ import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
-import * as yaml from 'js-yaml';
+import prettyjson from 'prettyjson';
 import pc from 'picocolors';
-import { highlight } from 'cli-highlight';
 
 function printYaml(obj: any) {
-  const yml = yaml.dump(obj, { sortKeys: true, forceQuotes: true });
-  console.log(highlight(yml, { language: 'yaml', ignoreIllegals: true }));
+  console.log(prettyjson.render(obj, {
+    keysColor: 'cyan',
+    dashColor: 'magenta',
+    stringColor: 'red',
+    numberColor: 'green'
+  }));
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
