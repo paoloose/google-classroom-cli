@@ -40,7 +40,23 @@ async function main() {
         console.error(pc.bold(pc.white(title)));
         const maxLen = Math.max(...cmds.map(c => c[0].length));
         for (const [cmd, desc] of cmds) {
-          console.error(`  ${pc.cyan(cmd.padEnd(maxLen + 2))} ${pc.dim(desc)}`);
+          const parts = cmd.split(' ');
+          let coloredCmd = '';
+          let wordIdx = 0;
+          
+          for (const p of parts) {
+            if (p.startsWith('<') || p.startsWith('[') || p.startsWith('-')) {
+              coloredCmd += pc.yellow(p) + ' ';
+            } else {
+              if (wordIdx === 0) coloredCmd += pc.green(p) + ' ';
+              else if (wordIdx === 1) coloredCmd += pc.magenta(p) + ' ';
+              else coloredCmd += pc.yellow(p) + ' ';
+              wordIdx++;
+            }
+          }
+          
+          const padding = ' '.repeat(Math.max(0, maxLen - cmd.length + 2));
+          console.error(`  ${coloredCmd.trimEnd()}${padding} ${pc.dim(desc)}`);
         }
         console.error('');
       };
