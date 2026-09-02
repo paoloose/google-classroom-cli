@@ -2,7 +2,6 @@
 import { parseArgv } from '../cli/foundation/argv.js';
 import { parseGlobalFlags } from '../cli/foundation/global-flags.js';
 import { AppError } from '../cli/foundation/error-map.js';
-import { printBanner } from '../cli/foundation/banner.js';
 import { emit, reportError } from '../cli/agent/json-mode.js';
 
 import { handleAuth } from './commands/auth.js';
