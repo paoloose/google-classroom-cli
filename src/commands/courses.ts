@@ -25,16 +25,23 @@ async function handleCourseList(globals: GlobalFlags, argv: any) {
     const res = await classroom.courses.list({
       courseStates: ['ACTIVE'],
     });
-    const courses = res.data.courses || [];
+    const activeCourses = res.data.courses || [];
     
-    emit({ courses }, globals, (data) => {
+    emit({ courses: activeCourses }, globals, (data) => {
       if (data.courses.length === 0) {
-        console.log('No courses found.');
+        console.log('No active courses found.');
         return;
       }
-      for (const course of data.courses) {
-        console.log(`- ${course.name} (${course.id})`);
+      for (const c of data.courses) {
+        console.log(`\n📘 ${c.name} (ID: ${c.id})`);
+        const details = [];
+        if (c.section) details.push(`Section: ${c.section}`);
+        if (c.subject) details.push(`Subject: ${c.subject}`);
+        if (c.room) details.push(`Room: ${c.room}`);
+        if (details.length > 0) console.log(`   ${details.join(' | ')}`);
+        if (c.alternateLink) console.log(`   Link: ${c.alternateLink}`);
       }
+      console.log(''); // Trailing newline for spacing
     });
   } catch (error: any) {
     throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to list courses' }, error);
@@ -53,10 +60,16 @@ async function handleCourseGet(globals: GlobalFlags, argv: any) {
     const course = res.data;
     
     emit({ course }, globals, (data) => {
-      console.log(`Course: ${data.course.name}`);
-      console.log(`ID: ${data.course.id}`);
-      console.log(`Status: ${data.course.courseState}`);
-      console.log(`Description: ${data.course.descriptionHeading || 'N/A'}`);
+      const c = data.course;
+      console.log(`\n📘 Course: ${c.name}`);
+      console.log(`   ID: ${c.id}`);
+      console.log(`   Status: ${c.courseState}`);
+      if (c.section) console.log(`   Section: ${c.section}`);
+      if (c.subject) console.log(`   Subject: ${c.subject}`);
+      if (c.room) console.log(`   Room: ${c.room}`);
+      if (c.descriptionHeading) console.log(`   Description: ${c.descriptionHeading}`);
+      if (c.alternateLink) console.log(`   Link: ${c.alternateLink}`);
+      console.log('');
     });
   } catch (error: any) {
     throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to get course' }, error);
