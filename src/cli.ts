@@ -46,13 +46,16 @@ async function main() {
     console.error('  roster remove <id>    Remove a user (requires --email)');
     console.error('Coursework & Content:');
     console.error('  stream list <id>      List announcements');
+    console.error('  stream get <course_id> <announcement_id>  View announcement details');
     console.error('  stream post <id>      Post announcement (requires --text)');
     console.error('  work list <id>        List coursework');
+    console.error('  work get <course_id> <work_id>     View assignment details and your submission');
     console.error('  work create <id>      Create an assignment (requires --title)');
     console.error('  topic list <course_id>             List topics in a course');
     console.error('  topic get <course_id> <topic_id>   View topic details, including its materials and assignments');
     console.error('  topic create <course_id> --name=... Create a new topic');
     console.error('  material list <id>    List classwork materials');
+    console.error('  material get <course_id> <material_id>  View material details');
     console.error('  material create <id>  Create material (requires --title, supports --file/--link)');
     console.error('  drive download <id>   Download a Drive file (optional --dest)');
     console.error('Grading & Submissions (Teachers):');
@@ -89,7 +92,7 @@ async function main() {
     if (noun === 'guardian') return await handleGuardians(verb, globals, argv);
     
     // Some are slightly renamed/grouped for CLI UX
-    if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['course', argv._[1], argv._[2]] });
+    if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['work', argv._[1], argv._[2], argv._[3]] });
     if (noun === 'submit') return await handleStudentAction('submit', globals, { ...argv, _: ['student', 'submit', argv._[1], argv._[2]]});
     if (noun === 'turn-in') return await handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
     if (noun === 'unsubmit') return await handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});

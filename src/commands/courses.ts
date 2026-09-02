@@ -52,13 +52,39 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     const id = argv._[2];
     if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course get <id>' });
     
-    note(`Fetching course ${id}...`, globals);
+    note(`Fetching course ${id} and its related data...`, globals);
     try {
-      const res = await classroom.courses.get({ id });
-      const course = res.data;
+      const [courseRes, teachersRes, topicsRes] = await Promise.all([
+        classroom.courses.get({ id }),
+        classroom.courses.teachers.list({ courseId: id }).catch(() => ({ data: { teachers: [] } })),
+        classroom.courses.topics.list({ courseId: id }).catch(() => ({ data: { topic: [] } }))
+      ]);
       
-      emit({ course }, globals, (data) => {
-        printBlock([getCourseBlock(data.course, !!argv.full)]);
+      const course = courseRes.data;
+      const teachers = teachersRes.data.teachers || [];
+      const topics = topicsRes.data.topic || [];
+      
+      emit({ course, teachers, topics }, globals, (data) => {
+        console.log(pc.green(`\n✔ Course Details:`));
+        const courseBlock = getCourseBlock(data.course, !!argv.full);
+        
+        if (data.teachers.length > 0) {
+          courseBlock.details!.push(['Teachers', data.teachers.map((t: any) => t.profile?.name?.fullName || t.userId).join(', ')]);
+        }
+        if (data.topics.length > 0) {
+          courseBlock.details!.push(['Topics', String(data.topics.length)]);
+        }
+        
+        printBlock([courseBlock]);
+        
+        if (data.topics.length > 0) {
+          console.log(pc.green(`✔ Topics:`));
+          printBlock(data.topics.map((t: any) => ({
+            title: t.name,
+            id: t.topicId,
+            details: [['Updated', t.updateTime]]
+          })));
+        }
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to get course' }, error);

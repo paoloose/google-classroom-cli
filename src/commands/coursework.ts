@@ -179,6 +179,88 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         }));
       });
     } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
+  } else if (verb === 'get') {
+    const workId = argv._[3];
+    if (!workId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID is required', hint: 'classroom work get <course_id> <work_id>' });
+    
+    note(`Fetching coursework ${workId}...`, globals);
+    try {
+      const [cwRes, subRes] = await Promise.all([
+        classroom.courses.courseWork.get({ courseId: id, id: workId }),
+        classroom.courses.courseWork.studentSubmissions.list({ courseId: id, courseWorkId: workId, userId: 'me' }).catch(() => ({ data: { studentSubmissions: [] } }))
+      ]);
+      
+      const cw = cwRes.data;
+      const submission = subRes.data.studentSubmissions?.[0];
+      const now = new Date();
+      
+      emit({ coursework: cw, submission }, globals, (data) => {
+        console.log(pc.green(`\n✔ Assignment Details:`));
+        
+        let dueStr = 'No due date';
+        if (data.coursework.dueDate) {
+          const tDate = parseDueDate(data.coursework);
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+          dueStr = `${localDateStr} (${formatTimeLeft(tDate, now)})`;
+        }
+        
+        const stateColor = data.coursework.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(data.coursework.state || 'UNKNOWN');
+        
+        const item: BlockItem = {
+          title: data.coursework.title,
+          id: data.coursework.id,
+          details: [
+            ['State', stateColor],
+            ['Due', data.coursework.dueDate ? pc.yellow(dueStr) : dueStr]
+          ]
+        };
+        
+        if (data.coursework.description) item.details!.push(['Description', data.coursework.description.split('\n')[0] + (data.coursework.description.includes('\n') ? '...' : '')]);
+        if (data.coursework.maxPoints) item.details!.push(['Max Points', String(data.coursework.maxPoints)]);
+        if (data.coursework.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
+        
+        if (data.coursework.materials && data.coursework.materials.length > 0) {
+          item.attachments = data.coursework.materials.map((att: any) => {
+            if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
+            if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+            if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
+            return 'Unknown Attachment';
+          });
+        }
+        printBlock([item]);
+        
+        if (data.submission) {
+          console.log(pc.green(`✔ Your Submission:`));
+          const subStateColor = data.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
+                                data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
+                                pc.yellow(data.submission.state || 'UNKNOWN');
+          const grade = data.submission.draftGrade !== undefined ? data.submission.draftGrade : (data.submission.assignedGrade !== undefined ? data.submission.assignedGrade : 'None');
+          
+          const subItem: BlockItem = {
+            title: `Student ${data.submission.userId}`,
+            id: data.submission.id,
+            details: [
+              ['State', subStateColor],
+              ['Grade', String(grade)]
+            ]
+          };
+          
+          if (data.submission.assignmentSubmission?.attachments) {
+            subItem.attachments = data.submission.assignmentSubmission.attachments.map((att: any) => {
+              if (att.driveFile) return `📄 ${att.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.id})`)}`;
+              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+              return 'Unknown Attachment';
+            });
+          } else {
+            subItem.attachments = [pc.dim('No files attached.')];
+          }
+          
+          printBlock([subItem]);
+        }
+      });
+    } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
   } else if (verb === 'create') {
     const title = argv['title'];
     if (!title) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: '--title is required' });
@@ -332,6 +414,34 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           return item;
         }));
       });
+  } else if (verb === 'get') {
+    const materialId = argv._[3];
+    if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <course_id> <material_id>' });
+    
+    note(`Fetching material ${materialId}...`, globals);
+    const res = await classroom.courses.courseWorkMaterials.get({ courseId, id: materialId });
+    emit({ material: res.data }, globals, (data) => {
+      console.log(pc.green(`\n✔ Material Details:`));
+      const m = data.material;
+      const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
+      const item: BlockItem = {
+        title: m.title,
+        id: m.id,
+        details: [['State', stateColor]]
+      };
+      if (m.description) item.details!.push(['Description', m.description.split('\n')[0] + (m.description.includes('\n') ? '...' : '')]);
+      if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+      
+      if (m.materials && m.materials.length > 0) {
+        item.attachments = m.materials.map((att: any) => {
+          if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
+          if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+          if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
+          return 'Unknown Attachment';
+        });
+      }
+      printBlock([item]);
+    });
   } else if (verb === 'create') {
     const title = argv['title'];
     const topicId = argv['topic'];
