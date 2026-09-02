@@ -14,12 +14,31 @@ bun link
 
 The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills) (`npx skills`). The skill teaches your agent the full feature surface — every command, every verb, the `--from`/`--last` filtering grammar, the `--full`/`--detailed` verbosity tiers, and the active-course-context resolver.
 
-### Install into a project
+You don't need to clone this repository to install the skill — `npx skills` can pull it straight from GitHub.
 
-From the repo root:
+### Install from GitHub (no clone required)
 
 ```bash
-# Install into whichever agents are detected (Claude Code, Codex, Cursor, etc.)
+# Install the latest from the public repo
+npx skills add paoloose/google-classroom-cli --skill classroom -y
+
+# Or install into a specific agent
+npx skills add paoloose/google-classroom-cli --skill classroom -a claude-code -y
+npx skills add paoloose/google-classroom-cli --skill classroom -a codex -y
+npx skills add paoloose/google-classroom-cli --skill classroom -a command-code -y
+
+# Globally (across all your projects)
+npx skills add paoloose/google-classroom-cli --skill classroom -g -a claude-code -y
+```
+
+The CLI accepts the GitHub shorthand (`owner/repo`), a full GitHub URL, or a direct path to a skill subdirectory — all documented in the [skills README](https://github.com/vercel-labs/skills#source-formats).
+
+### Install from a local clone
+
+If you've already cloned the repo:
+
+```bash
+# Install into whichever agents are detected
 npx skills add ./skills
 
 # Or target a specific agent
@@ -28,33 +47,24 @@ npx skills add ./skills -a codex -y
 npx skills add ./skills -a command-code -y
 ```
 
-This writes the skill to `./<agent>/skills/classroom/` so it can be committed with the project and shared with the team.
+This writes the skill to `./<agent>/skills/classroom/` so it can be committed with the project and shared with the team. `-g` installs to `~/.<agent>/skills/classroom/` for cross-project use.
 
-### Install globally
-
-```bash
-npx skills add ./skills -g -a claude-code -y
-```
-
-The `-g` flag installs to `~/.<agent>/skills/classroom/` so the skill is available across every project.
-
-### Other useful commands
+### Discovery and lifecycle
 
 ```bash
-# Discover what the local source exposes
-npx skills add ./skills --list
+# List available skills in the remote repo (no install)
+npx skills add paoloose/google-classroom-cli --list
 
-# Install just the classroom skill from any GitHub source
-npx skills add <owner>/<repo> --skill classroom -y
-
-# Keep it up to date
+# Keep the installed skill up to date
 npx skills update classroom
 
 # Remove it later
 npx skills remove classroom
 ```
 
-Supported agents include Claude Code, Codex, Cursor, Command Code, OpenCode, GitHub Copilot, Gemini CLI, and 70+ others. Run `npx skills add ./skills` interactively to see which agents the CLI detects on your machine.
+Supported agents include Claude Code, Codex, Cursor, Command Code, OpenCode, GitHub Copilot, Gemini CLI, and 70+ others — see the [full list](https://github.com/vercel-labs/skills#supported-agents). Run `npx skills add …` interactively (omit `-y`) to see which agents the CLI detects on your machine.
+
+> **Note:** The skill teaches your agent how to drive the CLI, but it doesn't ship the CLI itself. You'll still need the `classroom` binary on your `PATH` (via `bun link` from this repo, `npm install -g google-classroom-mcp`, or another install method) for the commands to actually run.
 
 ## Setup & Authentication
 
