@@ -1,17 +1,36 @@
 import { AppError } from '../../cli/foundation/error-map.js';
-import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import { emit, note } from '../../cli/agent/json-mode.js';
 import { getClient } from '../client.js';
-import prettyjson from 'prettyjson';
 import pc from 'picocolors';
 
-function printYaml(obj: any) {
-  console.log(prettyjson.render(obj, {
-    keysColor: 'cyan',
-    dashColor: 'magenta',
-    stringColor: 'red',
-    numberColor: 'green'
-  }));
+function printCourseModern(c: any, full: boolean = false) {
+  console.log(`${pc.cyan('●')} ${pc.bold(c.name)}`);
+  
+  const details: [string, string][] = [];
+  details.push(['ID', c.id]);
+  if (c.courseState || full) details.push(['Status', c.courseState === 'ACTIVE' ? pc.green('ACTIVE') : pc.yellow(c.courseState || 'N/A')]);
+  if (c.section || full) details.push(['Section', c.section || 'N/A']);
+  if (c.subject || full) details.push(['Subject', c.subject || 'N/A']);
+  if (c.room || full) details.push(['Room', c.room || 'N/A']);
+  if (c.descriptionHeading || full) details.push(['Description', c.descriptionHeading || 'N/A']);
+  if (c.alternateLink) details.push(['Link', pc.blue(pc.underline(c.alternateLink))]);
+
+  if (full) {
+    if (c.ownerId) details.push(['Owner ID', c.ownerId]);
+    if (c.creationTime) details.push(['Created', c.creationTime]);
+    if (c.updateTime) details.push(['Updated', c.updateTime]);
+    if (c.teacherGroupEmail) details.push(['Teacher Email', c.teacherGroupEmail]);
+    if (c.courseGroupEmail) details.push(['Course Email', c.courseGroupEmail]);
+    if (c.guardiansEnabled !== undefined) details.push(['Guardians', c.guardiansEnabled ? 'Yes' : 'No']);
+    if (c.calendarId) details.push(['Calendar ID', c.calendarId]);
+  }
+
+  const maxLen = Math.max(...details.map(d => d[0].length));
+  for (const [k, v] of details) {
+    console.log(`  ${pc.dim((k + ':').padEnd(maxLen + 1))} ${v}`);
+  }
+  console.log('');
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -29,16 +48,10 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
           console.log(pc.yellow('No active courses found.'));
           return;
         }
-        
-        const summary = data.courses.map(c => {
-          const res: any = { Name: c.name, ID: c.id };
-          if (c.section) res.Section = c.section;
-          if (c.subject) res.Subject = c.subject;
-          if (c.room) res.Room = c.room;
-          if (c.alternateLink) res.Link = c.alternateLink;
-          return res;
-        });
-        printYaml(summary);
+        console.log(''); // Leading newline
+        for (const c of data.courses) {
+          printCourseModern(c, !!argv.full);
+        }
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to list courses' }, error);
@@ -53,14 +66,8 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const course = res.data;
       
       emit({ course }, globals, (data) => {
-        const c = data.course;
-        const res: any = { Name: c.name, ID: c.id, Status: c.courseState };
-        if (c.section) res.Section = c.section;
-        if (c.subject) res.Subject = c.subject;
-        if (c.room) res.Room = c.room;
-        if (c.descriptionHeading) res.Description = c.descriptionHeading;
-        if (c.alternateLink) res.Link = c.alternateLink;
-        printYaml({ Course: res });
+        console.log('');
+        printCourseModern(data.course, !!argv.full);
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to get course' }, error);
@@ -82,8 +89,8 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const course = res.data;
       
       emit({ course }, globals, (data) => {
-        console.log(pc.green(`\nSuccessfully created course: ${data.course.name}`));
-        printYaml({ ID: data.course.id, State: data.course.courseState, Link: data.course.alternateLink });
+        console.log(pc.green(`\n✔ Successfully created course:`));
+        printCourseModern(data.course, !!argv.full);
       });
     } catch (error: any) {
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to create course' }, error);

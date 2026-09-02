@@ -16,6 +16,20 @@ async function main() {
   const argv = parseArgv(process.argv.slice(2));
   const globals = parseGlobalFlags(argv);
   
+  // Strict flag validation
+  const allowedFlags = new Set([
+    'json', 'help', 'h', 'full',
+    'name', 'section', 'status', 'email', 'role',
+    'text', 'title', 'link', 'file', 'dest', 'score', 'topic'
+  ]);
+  for (const key of Object.keys(argv)) {
+    if (key !== '_' && !allowedFlags.has(key)) {
+      const err = new AppError('UNKNOWN_FLAG', { name: 'UnknownFlag', human: `Unrecognized flag: --${key}` });
+      reportError(err, globals);
+      process.exit(1);
+    }
+  }
+
   if (argv.help || argv.h || argv._.length === 0) {
     if (!globals.json) printBanner({ name: 'Classroom', tagline: 'Classroom CLI' });
     console.error('Usage: classroom <noun> <verb> [options]');
