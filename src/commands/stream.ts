@@ -1,6 +1,7 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
@@ -13,8 +14,14 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
 
   if (verb === 'list') {
     const res = await classroom.courses.announcements.list({ courseId });
-    const announcements = res.data.announcements || [];
-    const fileIds = extractDriveFileIds(announcements);
+    const raw = res.data.announcements || [];
+    const range = resolveDateRange(globals.from, globals.last);
+    const announcements = applyDateFilter(raw, range, (a: any) => a.updateTime);
+    
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
+    const fileIds = shouldFetchRelated ? extractDriveFileIds(announcements) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     emit({ announcements }, globals, (data) => {
@@ -29,9 +36,12 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
           id: a.id,
           details: [['Posted', a.updateTime]]
         };
-        if (a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
-        const atts = formatAttachments(a.materials, sizeMap);
-        if (atts && atts.length > 0) item.attachments = atts;
+        if (isFull && a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+        
+        if (shouldFetchRelated) {
+          const atts = formatAttachments(a.materials, sizeMap);
+          if (atts && atts.length > 0) item.attachments = atts;
+        }
         return item;
       }));
     });
@@ -39,10 +49,13 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     const id = argv._[3];
     if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Announcement ID is required', hint: 'classroom stream get <course_id> <announcement_id>' });
     
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
     note(`Fetching announcement ${id}...`, globals);
     const res = await classroom.courses.announcements.get({ courseId, id });
     const a = res.data;
-    const fileIds = extractDriveFileIds([a]);
+    const fileIds = shouldFetchRelated ? extractDriveFileIds([a]) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     emit({ announcement: a }, globals, (data) => {
@@ -55,10 +68,12 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
           ['Posted', a.updateTime]
         ]
       };
-      if (a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+      if (isFull && a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
       
-      const atts = formatAttachments(a.materials, sizeMap);
-      if (atts && atts.length > 0) item.attachments = atts;
+      if (shouldFetchRelated) {
+        const atts = formatAttachments(a.materials, sizeMap);
+        if (atts && atts.length > 0) item.attachments = atts;
+      }
       
       printBlock([item]);
     });

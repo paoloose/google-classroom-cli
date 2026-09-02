@@ -1,34 +1,12 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
-
-function parseDueDate(cw: any) {
-  const d = cw.dueDate;
-  const t = cw.dueTime || { hours: 23, minutes: 59, seconds: 59 };
-  return new Date(Date.UTC(d.year, (d.month || 1) - 1, d.day || 1, t.hours || 0, t.minutes || 0, t.seconds || 0));
-}
-
-function formatTimeLeft(tDate: Date, now: Date) {
-  const diffMs = tDate.getTime() - now.getTime();
-  if (diffMs <= 0) return 'Overdue';
-  const totalSeconds = Math.floor(diffMs / 1000);
-  const days = Math.floor(totalSeconds / (3600 * 24));
-  const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (totalSeconds < 69 * 60) {
-    const m = Math.floor(totalSeconds / 60);
-    return `${m}m${seconds}s`;
-  } else if (totalSeconds >= 24 * 3600) {
-    return `${days}d${hours}h`;
-  } else {
-    return `${hours}h${minutes}m`;
-  }
-}
+import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 
 async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
@@ -59,68 +37,135 @@ async function getPendingTasks(classroom: any, globals: any) {
   return pendingTasks;
 }
 
+function formatTaskBlock(t: any, now: Date, shouldFetchRelated: boolean, isFull: boolean, sizeMap: Map<string, string>): BlockItem {
+  const item: BlockItem = {
+    title: t.courseWork.title,
+    id: t.courseWork.id,
+    details: [
+      ['Course', t.course]
+    ]
+  };
+
+  if (t.courseWork.dueDate) {
+    const tDate = parseDueDate(t.courseWork);
+    const timeLeft = formatTimeLeft(tDate, now);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+    item.details!.push(['Due', pc.yellow(`${localDateStr} (${timeLeft})`)]);
+  }
+
+  if (isFull) {
+    item.details!.push(['Course ID', t.courseId]);
+    if (t.courseWork.state) item.details!.push(['State', t.courseWork.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(t.courseWork.state)]);
+    if (t.courseWork.maxPoints !== undefined) item.details!.push(['Max Points', String(t.courseWork.maxPoints)]);
+    if (t.courseWork.description) {
+      const descPreview = t.courseWork.description.split('\n')[0];
+      item.details!.push(['Description', descPreview + (t.courseWork.description.length > descPreview.length ? '...' : '')]);
+    }
+    if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
+  }
+
+  if (shouldFetchRelated) {
+    const subStateColor = t.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
+                          t.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
+                          pc.yellow(t.submission.state || 'UNKNOWN');
+    const subStr = isFull && t.submission.id ? `${subStateColor} ${pc.dim(`(ID: ${t.submission.id})`)}` : subStateColor;
+    item.details!.push(['Submission', subStr]);
+    
+    if (t.submission.assignedGrade !== undefined || t.submission.draftGrade !== undefined) {
+      const grade = t.submission.assignedGrade !== undefined ? t.submission.assignedGrade : t.submission.draftGrade;
+      item.details!.push(['Grade', String(grade)]);
+    }
+
+    const taskAtts = formatAttachments(t.courseWork.materials, sizeMap) || [];
+    const subAtts = formatAttachments(t.submission.assignmentSubmission?.attachments, sizeMap) || [];
+    const allAtts = [
+      ...taskAtts,
+      ...subAtts.map(a => `${a} ${pc.dim('(Submitted)')}`)
+    ];
+    if (allAtts.length > 0) {
+      item.attachments = allAtts;
+    }
+  }
+
+  return item;
+}
+
 export async function handleTasksPending(globals: GlobalFlags, argv: any) {
   const classroom = await getClient();
+  const shouldFetchRelated = argv.related || globals.json;
+  const isFull = !!argv.full;
+  
   try {
     const pendingTasks = await getPendingTasks(classroom, globals);
+    const now = new Date();
+    
+    let sizeMap = new Map<string, string>();
+    if (shouldFetchRelated) {
+      const allMaterials = pendingTasks.flatMap(t => [
+        ...(t.courseWork.materials || []),
+        ...(t.submission.assignmentSubmission?.attachments || [])
+      ]);
+      const fileIds = extractDriveFileIds(allMaterials);
+      if (fileIds.length > 0) sizeMap = await fetchDriveFileSizes(fileIds);
+    }
+
     emit({ pendingTasks }, globals, (data) => {
       if (data.pendingTasks.length === 0) { 
         console.log(pc.green('✔ No pending tasks!')); 
         return; 
       }
-      printBlock(data.pendingTasks.map((t: any) => {
-        const item: BlockItem = {
-          title: t.courseWork.title,
-          id: t.courseWork.id,
-          details: [['Course', t.course]]
-        };
-        if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
-        return item;
-      }));
+      printBlock(data.pendingTasks.map((t: any) => formatTaskBlock(t, now, shouldFetchRelated, isFull, sizeMap)));
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
 
 export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
   const classroom = await getClient();
+  const shouldFetchRelated = argv.related || globals.json;
+  const isFull = !!argv.full;
+
   try {
     const pendingTasks = await getPendingTasks(classroom, globals);
     const now = new Date();
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const hasRangeFlag = !!globals.from || !!globals.last;
+    const range = resolveDateRange(globals.from, globals.last) ?? {
+      from: now,
+      to: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+    };
     
     const dueSoonTasks = pendingTasks.filter(t => {
       if (!t.courseWork.dueDate) return false;
       const tDate = parseDueDate(t.courseWork);
-      return tDate >= now && tDate <= nextWeek;
+      const fromMs = range.from!.getTime();
+      const toMs = range.to ? range.to.getTime() : Infinity;
+      return tDate.getTime() >= fromMs && tDate.getTime() <= toMs;
     });
     
     dueSoonTasks.sort((a, b) => {
       return parseDueDate(a.courseWork).getTime() - parseDueDate(b.courseWork).getTime();
     });
 
+    let sizeMap = new Map<string, string>();
+    if (shouldFetchRelated) {
+      const allMaterials = dueSoonTasks.flatMap(t => [
+        ...(t.courseWork.materials || []),
+        ...(t.submission.assignmentSubmission?.attachments || [])
+      ]);
+      const fileIds = extractDriveFileIds(allMaterials);
+      if (fileIds.length > 0) sizeMap = await fetchDriveFileSizes(fileIds);
+    }
+
     emit({ dueSoonTasks }, globals, (data) => {
-      if (data.dueSoonTasks.length === 0) { 
-        console.log(pc.green('✔ No tasks due in the next 7 days!')); 
-        return; 
+      if (data.dueSoonTasks.length === 0) {
+        const msg = hasRangeFlag
+          ? '✔ No tasks due in the specified window!'
+          : '✔ No tasks due in the next 7 days!';
+        console.log(pc.green(msg));
+        return;
       }
-      
-      printBlock(data.dueSoonTasks.map((t: any) => {
-        const tDate = parseDueDate(t.courseWork);
-        const timeLeft = formatTimeLeft(tDate, now);
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
-        
-        const item: BlockItem = {
-          title: t.courseWork.title,
-          id: t.courseWork.id,
-          details: [
-            ['Course', t.course],
-            ['Due', pc.yellow(`${localDateStr} (${timeLeft})`)]
-          ]
-        };
-        if (t.courseWork.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(t.courseWork.alternateLink))]);
-        return item;
-      }));
+
+      printBlock(data.dueSoonTasks.map((t: any) => formatTaskBlock(t, now, shouldFetchRelated, isFull, sizeMap)));
     });
   } catch (error: any) { throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error); }
 }
@@ -135,9 +180,15 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
     note(`Fetching coursework for course ${id}...`, globals);
     try {
       const res = await classroom.courses.courseWork.list({ courseId: id });
-      const coursework = res.data.courseWork || [];
+      const raw = res.data.courseWork || [];
+      const range = resolveDateRange(globals.from, globals.last);
+      const coursework = applyDateFilter(raw, range, (cw: any) => cw.dueDate ? parseDueDate(cw) : cw.updateTime);
       const now = new Date();
-      const fileIds = extractDriveFileIds(coursework);
+      
+      const shouldFetchRelated = argv.related || globals.json;
+      const isFull = !!argv.full;
+      
+      const fileIds = shouldFetchRelated ? extractDriveFileIds(coursework) : [];
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
       emit({ coursework }, globals, (data) => {
@@ -165,10 +216,16 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
               ['Due', cw.dueDate ? pc.yellow(dueStr) : dueStr]
             ]
           };
-          if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+          if (isFull) {
+            if (cw.maxPoints !== undefined) item.details!.push(['Max Points', String(cw.maxPoints)]);
+            if (cw.description) item.details!.push(['Description', cw.description.split('\n')[0]]);
+            if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+          }
 
-          const atts = formatAttachments(cw.materials, sizeMap);
-          if (atts) item.attachments = atts;
+          if (shouldFetchRelated) {
+            const atts = formatAttachments(cw.materials, sizeMap);
+            if (atts) item.attachments = atts;
+          }
           return item;
         }));
       });
@@ -191,7 +248,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const submission = subRes.data.studentSubmissions?.[0];
       const now = new Date();
       
-      const fileIds = extractDriveFileIds([cw, submission]);
+      const fileIds = shouldFetchRelated ? extractDriveFileIds([cw, submission]) : [];
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
       emit({ coursework: cw, submission }, globals, (data) => {
@@ -209,29 +266,43 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         
         const item: BlockItem = {
           title: data.coursework.title,
-          id: data.coursework.id
-        };
-        
-        const atts = formatAttachments(data.coursework.materials, sizeMap);
-        if (atts) item.attachments = atts;
-        
-        if (isFull) {
-          item.details = [
+          id: data.coursework.id,
+          details: [
             ['State', stateColor],
             ['Due', data.coursework.dueDate ? pc.yellow(dueStr) : dueStr]
-          ];
-          if (data.coursework.description) item.details.push(['Description', data.coursework.description.split('\n')[0] + (data.coursework.description.includes('\n') ? '...' : '')]);
-          if (data.coursework.maxPoints) item.details.push(['Max Points', String(data.coursework.maxPoints)]);
-          if (data.coursework.alternateLink) item.details.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
+          ]
+        };
+        
+        if (isFull) {
+          if (data.coursework.description) item.details!.push(['Description', data.coursework.description.split('\n')[0] + (data.coursework.description.includes('\n') ? '...' : '')]);
+          if (data.coursework.maxPoints !== undefined) item.details!.push(['Max Points', String(data.coursework.maxPoints)]);
+          if (data.coursework.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
         }
+
+        if (shouldFetchRelated) {
+          const atts = formatAttachments(data.coursework.materials, sizeMap);
+          if (atts) item.attachments = atts;
+        }
+        
         printBlock([item]);
         
         if (shouldFetchRelated && data.submission) {
           console.log(pc.green(`✔ Your Submission:`));
+          const subStateColor = data.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
+                                data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
+                                pc.yellow(data.submission.state || 'UNKNOWN');
           const subItem: BlockItem = {
             title: `Student ${data.submission.userId}`,
-            id: data.submission.id
+            id: data.submission.id,
+            details: [
+              ['State', subStateColor]
+            ]
           };
+
+          const grade = data.submission.draftGrade !== undefined ? data.submission.draftGrade : (data.submission.assignedGrade !== undefined ? data.submission.assignedGrade : undefined);
+          if (grade !== undefined) {
+            subItem.details!.push(['Grade', String(grade)]);
+          }
           
           const subAtts = formatAttachments(data.submission.assignmentSubmission?.attachments, sizeMap);
           if (subAtts && subAtts.length > 0) {
@@ -240,16 +311,6 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             subItem.attachments = [pc.dim('No files attached.')];
           }
           
-          if (isFull) {
-            const subStateColor = data.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
-                                  data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
-                                  pc.yellow(data.submission.state || 'UNKNOWN');
-            const grade = data.submission.draftGrade !== undefined ? data.submission.draftGrade : (data.submission.assignedGrade !== undefined ? data.submission.assignedGrade : 'None');
-            subItem.details = [
-              ['State', subStateColor],
-              ['Grade', String(grade)]
-            ];
-          }
           printBlock([subItem]);
         }
       });
@@ -277,18 +338,27 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
 
   if (verb === 'list') {
     const res = await classroom.courses.topics.list({ courseId });
-    const topics = res.data.topic || [];
-      emit({ topics }, globals, (data) => {
-        if (data.topics.length === 0) {
-          console.log(pc.yellow('No topics found.'));
-          return;
-        }
-        printBlock(data.topics.map((t: any) => ({
+    const raw = res.data.topic || [];
+    const range = resolveDateRange(globals.from, globals.last);
+    const topics = applyDateFilter(raw, range, (t: any) => t.updateTime);
+    const isFull = !!argv.full;
+    
+    emit({ topics }, globals, (data) => {
+      if (data.topics.length === 0) {
+        console.log(pc.yellow('No topics found.'));
+        return;
+      }
+      printBlock(data.topics.map((t: any) => {
+        const item: BlockItem = {
           title: t.name,
-          id: t.topicId,
-          details: [['Updated', t.updateTime]]
-        })));
-      });
+          id: t.topicId
+        };
+        if (isFull) {
+          item.details = [['Updated', t.updateTime]];
+        }
+        return item;
+      }));
+    });
   } else if (verb === 'get') {
     const topicId = argv._[3];
     if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <course_id> <topic_id>' });
@@ -304,8 +374,11 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     ]);
     
     const topic = topicRes.data;
-    const coursework = (cwRes.data.courseWork || []).filter(cw => cw.topicId === topicId);
-    const materials = (matRes.data.courseWorkMaterial || []).filter(m => m.topicId === topicId);
+    const rawCw = (cwRes.data.courseWork || []).filter(cw => cw.topicId === topicId);
+    const rawMat = (matRes.data.courseWorkMaterial || []).filter(m => m.topicId === topicId);
+    const range = resolveDateRange(globals.from, globals.last);
+    const coursework = applyDateFilter(rawCw, range, (cw: any) => cw.dueDate ? parseDueDate(cw) : cw.updateTime);
+    const materials = applyDateFilter(rawMat, range, (m: any) => m.updateTime);
     
     const fileIds = shouldFetchRelated ? extractDriveFileIds([coursework, materials]) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
@@ -369,8 +442,14 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
 
   if (verb === 'list') {
     const res = await classroom.courses.courseWorkMaterials.list({ courseId });
-    const materials = res.data.courseWorkMaterial || [];
-    const fileIds = extractDriveFileIds(materials);
+    const raw = res.data.courseWorkMaterial || [];
+    const range = resolveDateRange(globals.from, globals.last);
+    const materials = applyDateFilter(raw, range, (m: any) => m.updateTime);
+    
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
+    const fileIds = shouldFetchRelated ? extractDriveFileIds(materials) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     emit({ materials }, globals, (data) => {
@@ -385,10 +464,12 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           id: m.id,
           details: [['State', stateColor]]
         };
-        if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+        if (isFull && m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
         
-        const atts = formatAttachments(m.materials, sizeMap);
-        if (atts) item.attachments = atts;
+        if (shouldFetchRelated) {
+          const atts = formatAttachments(m.materials, sizeMap);
+          if (atts) item.attachments = atts;
+        }
         return item;
       }));
     });
@@ -396,10 +477,13 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     const materialId = argv._[3];
     if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <course_id> <material_id>' });
     
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
     note(`Fetching material ${materialId}...`, globals);
     const res = await classroom.courses.courseWorkMaterials.get({ courseId, id: materialId });
     const m = res.data;
-    const fileIds = extractDriveFileIds([m]);
+    const fileIds = shouldFetchRelated ? extractDriveFileIds([m]) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     emit({ material: m }, globals, (data) => {
@@ -411,11 +495,15 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
         id: mat.id,
         details: [['State', stateColor]]
       };
-      if (mat.description) item.details!.push(['Description', mat.description.split('\n')[0] + (mat.description.includes('\n') ? '...' : '')]);
-      if (mat.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(mat.alternateLink))]);
+      if (isFull) {
+        if (mat.description) item.details!.push(['Description', mat.description.split('\n')[0] + (mat.description.includes('\n') ? '...' : '')]);
+        if (mat.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(mat.alternateLink))]);
+      }
       
-      const atts = formatAttachments(mat.materials, sizeMap);
-      if (atts) item.attachments = atts;
+      if (shouldFetchRelated) {
+        const atts = formatAttachments(mat.materials, sizeMap);
+        if (atts) item.attachments = atts;
+      }
       printBlock([item]);
     });
   } else if (verb === 'create') {
@@ -464,8 +552,14 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
 
   if (verb === 'list') {
     const res = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId });
-    const submissions = res.data.studentSubmissions || [];
-    const fileIds = extractDriveFileIds(submissions);
+    const raw = res.data.studentSubmissions || [];
+    const range = resolveDateRange(globals.from, globals.last);
+    const submissions = applyDateFilter(raw, range, (s: any) => s.updateTime || s.creationTime);
+    
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
+    const fileIds = shouldFetchRelated ? extractDriveFileIds(submissions) : [];
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     emit({ submissions }, globals, (data) => {
@@ -487,9 +581,11 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
             ['Grade', String(grade)]
           ]
         };
-        if (s.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(s.alternateLink))]);
-        const atts = formatAttachments(s.assignmentSubmission?.attachments, sizeMap);
-        if (atts && atts.length > 0) item.attachments = atts;
+        if (isFull && s.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(s.alternateLink))]);
+        if (shouldFetchRelated) {
+          const atts = formatAttachments(s.assignmentSubmission?.attachments, sizeMap);
+          if (atts && atts.length > 0) item.attachments = atts;
+        }
         return item;
       }));
     });
