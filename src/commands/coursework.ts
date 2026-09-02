@@ -215,6 +215,19 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           id: data.coursework.id
         };
         
+        const extractAtts = (mats: any[]) => {
+          if (!mats || mats.length === 0) return undefined;
+          return mats.map((att: any) => {
+            if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
+            if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+            if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+            return 'Unknown Attachment';
+          });
+        };
+
+        const atts = extractAtts(data.coursework.materials);
+        if (atts) item.attachments = atts;
+        
         if (isFull) {
           item.details = [
             ['State', stateColor],
@@ -223,15 +236,6 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           if (data.coursework.description) item.details.push(['Description', data.coursework.description.split('\n')[0] + (data.coursework.description.includes('\n') ? '...' : '')]);
           if (data.coursework.maxPoints) item.details.push(['Max Points', String(data.coursework.maxPoints)]);
           if (data.coursework.alternateLink) item.details.push(['Link', pc.blue(pc.underline(data.coursework.alternateLink))]);
-          
-          if (data.coursework.materials && data.coursework.materials.length > 0) {
-            item.attachments = data.coursework.materials.map((att: any) => {
-              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.driveFile.id})`)}`;
-              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title} ${pc.dim(`(${att.youtubeVideo.alternateLink})`)}`;
-              return 'Unknown Attachment';
-            });
-          }
         }
         printBlock([item]);
         
@@ -242,6 +246,17 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             id: data.submission.id
           };
           
+          if (data.submission.assignmentSubmission?.attachments) {
+            subItem.attachments = data.submission.assignmentSubmission.attachments.map((att: any) => {
+              if (att.driveFile) return `📄 ${att.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.id})`)}`;
+              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+              return 'Unknown Attachment';
+            });
+          } else {
+            subItem.attachments = [pc.dim('No files attached.')];
+          }
+          
           if (isFull) {
             const subStateColor = data.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
                                   data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
@@ -251,16 +266,6 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
               ['State', subStateColor],
               ['Grade', String(grade)]
             ];
-            if (data.submission.assignmentSubmission?.attachments) {
-              subItem.attachments = data.submission.assignmentSubmission.attachments.map((att: any) => {
-                if (att.driveFile) return `📄 ${att.driveFile.title} ${pc.dim(`(ID: ${att.driveFile.id})`)}`;
-                if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                return 'Unknown Attachment';
-              });
-            } else {
-              subItem.attachments = [pc.dim('No files attached.')];
-            }
           }
           printBlock([subItem]);
         }
@@ -326,21 +331,26 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
       printBlock([topicItem]);
       
       if (shouldFetchRelated) {
+        const extractAtts = (mats: any[]) => {
+          if (!mats || mats.length === 0) return undefined;
+          return mats.map((att: any) => {
+            if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+            if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+            if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+            return 'Unknown Attachment';
+          });
+        };
+
         if (data.materials.length > 0) {
           console.log(pc.green(`\n✔ Materials under this topic:`));
           printBlock(data.materials.map((m: any) => {
             const item: BlockItem = { title: m.title, id: m.id };
+            const atts = extractAtts(m.materials);
+            if (atts) item.attachments = atts;
+            
             if (isFull) {
               item.details = [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]];
               if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-              if (m.materials && m.materials.length > 0) {
-                item.attachments = m.materials.map((att: any) => {
-                  if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-                  if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                  if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                  return 'Unknown Attachment';
-                });
-              }
             }
             return item;
           }));
@@ -352,17 +362,12 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
           console.log(pc.green(`\n✔ Assignments under this topic:`));
           printBlock(data.coursework.map((cw: any) => {
             const item: BlockItem = { title: cw.title, id: cw.id };
+            const atts = extractAtts(cw.materials);
+            if (atts) item.attachments = atts;
+            
             if (isFull) {
               item.details = [['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')]];
               if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
-              if (cw.materials && cw.materials.length > 0) {
-                item.attachments = cw.materials.map((att: any) => {
-                  if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-                  if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                  if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                  return 'Unknown Attachment';
-                });
-              }
             }
             return item;
           }));

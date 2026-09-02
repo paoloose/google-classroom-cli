@@ -90,11 +90,33 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
         printBlock([courseBlock]);
         
         if (shouldFetchRelated) {
+          const extractAtts = (mats: any[]) => {
+            if (!mats || mats.length === 0) return undefined;
+            return mats.map((att: any) => {
+              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+              return 'Unknown Attachment';
+            });
+          };
+
           if (data.topics.length > 0) {
             console.log(pc.green(`✔ Topics:`));
             printBlock(data.topics.map((t: any) => {
               const item: BlockItem = { title: t.name, id: t.topicId };
               if (isFull) item.details = [['Updated', t.updateTime]];
+              
+              const topicAtts: string[] = [];
+              data.coursework.filter((cw: any) => cw.topicId === t.topicId).forEach((cw: any) => {
+                const atts = extractAtts(cw.materials);
+                if (atts) topicAtts.push(...atts);
+              });
+              data.materials.filter((m: any) => m.topicId === t.topicId).forEach((m: any) => {
+                const atts = extractAtts(m.materials);
+                if (atts) topicAtts.push(...atts);
+              });
+              if (topicAtts.length > 0) item.attachments = topicAtts;
+              
               return item;
             }));
           }
@@ -103,20 +125,15 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Assignments:`));
             printBlock(data.coursework.map((cw: any) => {
               const item: BlockItem = { title: cw.title, id: cw.id };
+              const atts = extractAtts(cw.materials);
+              if (atts) item.attachments = atts;
+              
               if (isFull) {
                 item.details = [
                   ['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')],
                   ['Due', cw.dueDate ? `${cw.dueDate.year}-${cw.dueDate.month}-${cw.dueDate.day}` : 'None']
                 ];
                 if (cw.alternateLink) item.details.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
-                if (cw.materials && cw.materials.length > 0) {
-                  item.attachments = cw.materials.map((att: any) => {
-                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                    return 'Unknown Attachment';
-                  });
-                }
               }
               return item;
             }));
@@ -126,17 +143,12 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Materials:`));
             printBlock(data.materials.map((m: any) => {
               const item: BlockItem = { title: m.title, id: m.id };
+              const atts = extractAtts(m.materials);
+              if (atts) item.attachments = atts;
+              
               if (isFull) {
                 item.details = [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]];
                 if (m.alternateLink) item.details.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-                if (m.materials && m.materials.length > 0) {
-                  item.attachments = m.materials.map((att: any) => {
-                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                    return 'Unknown Attachment';
-                  });
-                }
               }
               return item;
             }));
@@ -146,17 +158,12 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
             console.log(pc.green(`✔ Stream Announcements:`));
             printBlock(data.stream.map((a: any) => {
               const item: BlockItem = { title: a.text.split('\n')[0].substring(0, 50) + (a.text.length > 50 ? '...' : ''), id: a.id };
+              const atts = extractAtts(a.materials);
+              if (atts) item.attachments = atts;
+              
               if (isFull) {
                 item.details = [['Posted', a.updateTime]];
                 if (a.alternateLink) item.details.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
-                if (a.materials && a.materials.length > 0) {
-                  item.attachments = a.materials.map((att: any) => {
-                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-                    return 'Unknown Attachment';
-                  });
-                }
               }
               return item;
             }));
