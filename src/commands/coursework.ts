@@ -884,42 +884,54 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
   const submission = subRes.data.studentSubmissions?.[0];
   if (!submission) throw new AppError('NOT_FOUND', { name: 'NotFound', human: 'Submission not found for you' });
 
-  if (verb === 'submit') {
-    const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
-    const files = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
-    
-    if (links.length === 0 && files.length === 0) {
-      throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'At least one --link or --file is required' });
-    }
-
-    const addAttachments: any[] = [];
-    
-    for (const link of links) {
-      addAttachments.push({ link: { url: link } });
-    }
-    
-    if (files.length > 0) {
-      const { uploadToDrive } = await import('./drive.js');
-      for (const file of files) {
-        note(`Uploading ${file} to Google Drive...`, globals);
-        const fileId = await uploadToDrive(file, globals);
-        addAttachments.push({ driveFile: { id: fileId } });
+  try {
+    if (verb === 'submit') {
+      const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
+      const files = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+      
+      if (links.length === 0 && files.length === 0) {
+        throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'At least one --link or --file is required' });
       }
-    }
 
-    await classroom.courses.courseWork.studentSubmissions.modifyAttachments({
-      courseId, courseWorkId, id: submission.id!,
-      requestBody: { addAttachments }
-    });
-    
-    emit({ success: true }, globals, () => console.log(`Successfully attached ${addAttachments.length} items to submission.`));
-  } else if (verb === 'turn-in') {
-    await classroom.courses.courseWork.studentSubmissions.turnIn({ courseId, courseWorkId, id: submission.id! });
-    emit({ success: true }, globals, () => console.log(`Turned in assignment.`));
-  } else if (verb === 'unsubmit') {
-    await classroom.courses.courseWork.studentSubmissions.reclaim({ courseId, courseWorkId, id: submission.id! });
-    emit({ success: true }, globals, () => console.log(`Unsubmitted assignment.`));
-  } else {
-    throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown verb: ${verb}` });
+      const addAttachments: any[] = [];
+      
+      for (const link of links) {
+        addAttachments.push({ link: { url: link } });
+      }
+      
+      if (files.length > 0) {
+        const { uploadToDrive } = await import('./drive.js');
+        for (const file of files) {
+          note(`Uploading ${file} to Google Drive...`, globals);
+          const fileId = await uploadToDrive(file, globals);
+          addAttachments.push({ driveFile: { id: fileId } });
+        }
+      }
+
+      await classroom.courses.courseWork.studentSubmissions.modifyAttachments({
+        courseId, courseWorkId, id: submission.id!,
+        requestBody: { addAttachments }
+      });
+      
+      emit({ success: true }, globals, () => console.log(`Successfully attached ${addAttachments.length} items to submission.`));
+    } else if (verb === 'turn-in') {
+      await classroom.courses.courseWork.studentSubmissions.turnIn({ courseId, courseWorkId, id: submission.id! });
+      emit({ success: true }, globals, () => console.log(`Turned in assignment.`));
+    } else if (verb === 'unsubmit') {
+      await classroom.courses.courseWork.studentSubmissions.reclaim({ courseId, courseWorkId, id: submission.id! });
+      emit({ success: true }, globals, () => console.log(`Unsubmitted assignment.`));
+    } else {
+      throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown verb: ${verb}` });
+    }
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
+    if (error.message?.includes('@ProjectPermissionDenied') || error.message?.includes('Developer Console project is not permitted')) {
+      throw new AppError('PROJECT_PERMISSION_DENIED', {
+        name: 'ProjectPermissionDenied',
+        human: 'Google Classroom API restriction: Submissions can only be modified by the Google Cloud project that created the assignment.',
+        hint: 'Assignments created manually by teachers in the Classroom web UI have associatedWithDeveloper: false, which prevents third-party API clients from modifying or turning in submissions.'
+      }, error);
+    }
+    throw new AppError('API_ERROR', { name: 'ApiError', human: error.message }, error);
   }
 }
