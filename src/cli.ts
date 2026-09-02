@@ -2,7 +2,7 @@
 import { parseArgv } from '../cli/foundation/argv.js';
 import { parseGlobalFlags } from '../cli/foundation/global-flags.js';
 import { AppError } from '../cli/foundation/error-map.js';
-import { emit, reportError } from '../cli/agent/json-mode.js';
+import { emit, reportError, note } from '../cli/agent/json-mode.js';
 
 import { handleAuth } from './commands/auth.js';
 import { handleCourse } from './commands/courses.js';
@@ -18,7 +18,7 @@ async function main() {
   
   // Strict flag validation
   const allowedFlags = new Set([
-    'json', 'help', 'h', 'full', 'related',
+    'json', 'help', 'h', 'full', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
     'text', 'title', 'link', 'file', 'dest', 'score', 'topic'
   ]);
@@ -89,7 +89,7 @@ async function main() {
         ['material list <id>', 'List classwork materials'],
         ['material get <course_id> <id>', 'View material details'],
         ['material create <id>', 'Create material (requires --title, supports --file/--link)'],
-        ['drive download <id>', 'Download a Drive file (optional --dest)']
+        ['drive download <id> [dest]', 'Download a Drive file (defaults to original filename)']
       ]);
       
       printCategory('Grading & Submissions (Teachers)', [
@@ -139,11 +139,12 @@ async function main() {
     
     if (noun === 'drive' && verb === 'download') {
       const fileId = argv._[2];
-      const dest = argv['dest'] || 'downloaded_file';
-      if (!fileId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'File ID is required' });
+      const destArg = argv._[3] || argv['dest'];
+      if (!fileId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'File ID is required', hint: 'classroom drive download <id> [dest]' });
       const { downloadFromDrive } = await import('./commands/drive.js');
-      await downloadFromDrive(fileId, dest, globals);
-      emit({ success: true, fileId, dest }, globals, () => console.log(`Downloaded ${fileId} to ${dest}`));
+      note(`Downloading file ${fileId}...`, globals);
+      const finalDest = await downloadFromDrive(fileId, destArg, globals);
+      emit({ success: true, fileId, dest: finalDest }, globals, () => console.log(`Downloaded ${fileId} to ${finalDest}`));
       return;
     }
 

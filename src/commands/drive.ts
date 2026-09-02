@@ -57,13 +57,41 @@ export async function uploadToDrive(filePath: string, globals: any): Promise<str
 }
 
 import { createWriteStream } from 'node:fs';
+import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-export async function downloadFromDrive(fileId: string, destPath: string, globals: any): Promise<void> {
+export async function downloadFromDrive(fileId: string, destPath?: string, globals?: any): Promise<string> {
   const drive = await getDriveClient();
+
+  let targetDest = destPath;
+
+  if (!targetDest) {
+    try {
+      const meta = await drive.files.get({ fileId, fields: 'name' });
+      if (meta.data.name) {
+        targetDest = meta.data.name;
+      }
+    } catch {
+      // Fallback
+    }
+  } else if (targetDest.endsWith('/') || (existsSync(targetDest) && statSync(targetDest).isDirectory())) {
+    try {
+      const meta = await drive.files.get({ fileId, fields: 'name' });
+      const originalName = meta.data.name || 'downloaded_file';
+      targetDest = join(targetDest, originalName);
+    } catch {
+      targetDest = join(targetDest, 'downloaded_file');
+    }
+  }
+
+  if (!targetDest) {
+    targetDest = 'downloaded_file';
+  }
+
   const res = await drive.files.get(
     { fileId, alt: 'media' },
     { responseType: 'stream' }
   );
-  await pipeline(res.data, createWriteStream(destPath));
+  await pipeline(res.data, createWriteStream(targetDest));
+  return targetDest;
 }
