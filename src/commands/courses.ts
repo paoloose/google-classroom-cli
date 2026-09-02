@@ -52,38 +52,115 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     const id = argv._[2];
     if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course get <id>' });
     
-    note(argv.related ? `Fetching course ${id} and its related data...` : `Fetching course ${id}...`, globals);
+    const shouldFetchRelated = argv.related || globals.json;
+    const isFull = !!argv.full;
+    
+    note(shouldFetchRelated ? `Fetching course ${id} and its related data...` : `Fetching course ${id}...`, globals);
     try {
-      const [courseRes, teachersRes, topicsRes] = await Promise.all([
+      const [courseRes, teachersRes, topicsRes, workRes, matRes, streamRes] = await Promise.all([
         classroom.courses.get({ id }),
-        argv.related ? classroom.courses.teachers.list({ courseId: id }).catch(() => ({ data: { teachers: [] } })) : Promise.resolve({ data: { teachers: [] } }),
-        argv.related ? classroom.courses.topics.list({ courseId: id }).catch(() => ({ data: { topic: [] } })) : Promise.resolve({ data: { topic: [] } })
+        shouldFetchRelated ? classroom.courses.teachers.list({ courseId: id }).catch(() => ({ data: { teachers: [] } })) : Promise.resolve({ data: { teachers: [] } }),
+        shouldFetchRelated ? classroom.courses.topics.list({ courseId: id }).catch(() => ({ data: { topic: [] } })) : Promise.resolve({ data: { topic: [] } }),
+        shouldFetchRelated ? classroom.courses.courseWork.list({ courseId: id }).catch(() => ({ data: { courseWork: [] } })) : Promise.resolve({ data: { courseWork: [] } }),
+        shouldFetchRelated ? classroom.courses.courseWorkMaterials.list({ courseId: id }).catch(() => ({ data: { courseWorkMaterial: [] } })) : Promise.resolve({ data: { courseWorkMaterial: [] } }),
+        shouldFetchRelated ? classroom.courses.announcements.list({ courseId: id }).catch(() => ({ data: { announcements: [] } })) : Promise.resolve({ data: { announcements: [] } })
       ]);
       
       const course = courseRes.data;
       const teachers = teachersRes.data.teachers || [];
       const topics = topicsRes.data.topic || [];
+      const coursework = workRes.data.courseWork || [];
+      const materials = matRes.data.courseWorkMaterial || [];
+      const stream = streamRes.data.announcements || [];
       
-      emit({ course, teachers, topics }, globals, (data) => {
-        if (argv.related) console.log(pc.green(`\n✔ Course Details:`));
-        const courseBlock = getCourseBlock(data.course, !!argv.full);
+      emit({ course, teachers, topics, coursework, materials, stream }, globals, (data) => {
+        if (shouldFetchRelated) console.log(pc.green(`\n✔ Course Details:`));
+        const courseBlock = getCourseBlock(data.course, isFull);
         
-        if (argv.related && data.teachers.length > 0) {
+        if (shouldFetchRelated && data.teachers.length > 0) {
           courseBlock.details!.push(['Teachers', data.teachers.map((t: any) => t.profile?.name?.fullName || t.userId).join(', ')]);
         }
-        if (argv.related && data.topics.length > 0) {
-          courseBlock.details!.push(['Topics', String(data.topics.length)]);
+        if (shouldFetchRelated) {
+          if (data.topics.length > 0) courseBlock.details!.push(['Topics', String(data.topics.length)]);
+          if (data.coursework.length > 0) courseBlock.details!.push(['Assignments', String(data.coursework.length)]);
+          if (data.materials.length > 0) courseBlock.details!.push(['Materials', String(data.materials.length)]);
+          if (data.stream.length > 0) courseBlock.details!.push(['Announcements', String(data.stream.length)]);
         }
         
         printBlock([courseBlock]);
         
-        if (argv.related && data.topics.length > 0) {
-          console.log(pc.green(`✔ Topics:`));
-          printBlock(data.topics.map((t: any) => ({
-            title: t.name,
-            id: t.topicId,
-            details: [['Updated', t.updateTime]]
-          })));
+        if (shouldFetchRelated) {
+          if (data.topics.length > 0) {
+            console.log(pc.green(`✔ Topics:`));
+            printBlock(data.topics.map((t: any) => {
+              const item: BlockItem = { title: t.name, id: t.topicId };
+              if (isFull) item.details = [['Updated', t.updateTime]];
+              return item;
+            }));
+          }
+          
+          if (data.coursework.length > 0) {
+            console.log(pc.green(`✔ Assignments:`));
+            printBlock(data.coursework.map((cw: any) => {
+              const item: BlockItem = { title: cw.title, id: cw.id };
+              if (isFull) {
+                item.details = [
+                  ['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')],
+                  ['Due', cw.dueDate ? `${cw.dueDate.year}-${cw.dueDate.month}-${cw.dueDate.day}` : 'None']
+                ];
+                if (cw.alternateLink) item.details.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+                if (cw.materials && cw.materials.length > 0) {
+                  item.attachments = cw.materials.map((att: any) => {
+                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+                    return 'Unknown Attachment';
+                  });
+                }
+              }
+              return item;
+            }));
+          }
+          
+          if (data.materials.length > 0) {
+            console.log(pc.green(`✔ Materials:`));
+            printBlock(data.materials.map((m: any) => {
+              const item: BlockItem = { title: m.title, id: m.id };
+              if (isFull) {
+                item.details = [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]];
+                if (m.alternateLink) item.details.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+                if (m.materials && m.materials.length > 0) {
+                  item.attachments = m.materials.map((att: any) => {
+                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+                    return 'Unknown Attachment';
+                  });
+                }
+              }
+              return item;
+            }));
+          }
+          
+          if (data.stream.length > 0) {
+            console.log(pc.green(`✔ Stream Announcements:`));
+            printBlock(data.stream.map((a: any) => {
+              const item: BlockItem = { title: a.text.split('\n')[0].substring(0, 50) + (a.text.length > 50 ? '...' : ''), id: a.id };
+              if (isFull) {
+                item.details = [['Posted', a.updateTime]];
+                if (a.alternateLink) item.details.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+                if (a.materials && a.materials.length > 0) {
+                  item.attachments = a.materials.map((att: any) => {
+                    if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+                    if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+                    if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+                    return 'Unknown Attachment';
+                  });
+                }
+              }
+              return item;
+            }));
+          }
         }
       });
     } catch (error: any) {
