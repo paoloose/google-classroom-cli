@@ -21,12 +21,12 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
     
-    const fileIds = shouldFetchRelated ? extractDriveFileIds(announcements) : [];
+    const fileIds = extractDriveFileIds(announcements);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
     const enrichedAnnouncements = announcements.map((a: any) => ({
       ...a,
-      ...(shouldFetchRelated ? { files: extractAttachedFiles(a.materials, sizeMap) } : {})
+      files: extractAttachedFiles(a.materials, sizeMap)
     }));
 
     emit({ announcements: enrichedAnnouncements }, globals, (data) => {
@@ -43,10 +43,8 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
         };
         if (isFull && a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
         
-        if (shouldFetchRelated) {
-          const atts = formatAttachments(a.materials, sizeMap);
-          if (atts && atts.length > 0) item.attachments = atts;
-        }
+        const atts = formatAttachments(a.materials, sizeMap);
+        if (atts && atts.length > 0) item.attachments = atts;
         return item;
       }));
     });
@@ -68,10 +66,14 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     note(`Fetching announcement ${id}...`, globals);
     const res = await classroom.courses.announcements.get({ courseId, id });
     const a = res.data;
-    const fileIds = shouldFetchRelated ? extractDriveFileIds([a]) : [];
+    const fileIds = extractDriveFileIds([a]);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    const enrichedAnnouncement = {
+      ...a,
+      files: extractAttachedFiles(a.materials, sizeMap)
+    };
     
-    emit({ announcement: a }, globals, (data) => {
+    emit({ announcement: enrichedAnnouncement }, globals, (data) => {
       console.log(pc.green(`\n✔ Announcement Details:`));
       const item: BlockItem = {
         title: a.text,
@@ -90,10 +92,8 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
         if (a.assigneeMode) item.details!.push(['Assignee Mode', a.assigneeMode]);
       }
       
-      if (shouldFetchRelated) {
-        const atts = formatAttachments(a.materials, sizeMap);
-        if (atts && atts.length > 0) item.attachments = atts;
-      }
+      const atts = formatAttachments(a.materials, sizeMap);
+      if (atts && atts.length > 0) item.attachments = atts;
       
       printBlock([item]);
     });

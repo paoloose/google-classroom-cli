@@ -68,6 +68,16 @@ function formatTaskBlock(t: any, now: Date, shouldFetchRelated: boolean, isFull:
     if (t.courseWork.description) item.details!.push(['Description', t.courseWork.description]);
   }
 
+  const taskAtts = formatAttachments(t.courseWork.materials, sizeMap) || [];
+  const subAtts = shouldFetchRelated ? (formatAttachments(t.submission.assignmentSubmission?.attachments, sizeMap) || []) : [];
+  const allAtts = [
+    ...taskAtts,
+    ...subAtts.map(a => `${a} ${pc.dim('(Submitted)')}`)
+  ];
+  if (allAtts.length > 0) {
+    item.attachments = allAtts;
+  }
+
   if (shouldFetchRelated) {
     const subStateColor = t.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
                           t.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
@@ -78,16 +88,6 @@ function formatTaskBlock(t: any, now: Date, shouldFetchRelated: boolean, isFull:
     if (t.submission.assignedGrade !== undefined || t.submission.draftGrade !== undefined) {
       const grade = t.submission.assignedGrade !== undefined ? t.submission.assignedGrade : t.submission.draftGrade;
       item.details!.push(['Grade', String(grade)]);
-    }
-
-    const taskAtts = formatAttachments(t.courseWork.materials, sizeMap) || [];
-    const subAtts = formatAttachments(t.submission.assignmentSubmission?.attachments, sizeMap) || [];
-    const allAtts = [
-      ...taskAtts,
-      ...subAtts.map(a => `${a} ${pc.dim('(Submitted)')}`)
-    ];
-    if (allAtts.length > 0) {
-      item.attachments = allAtts;
     }
   }
 
@@ -103,15 +103,12 @@ export async function handleTasksPending(globals: GlobalFlags, argv: any) {
     const pendingTasks = await getPendingTasks(classroom, globals);
     const now = new Date();
     
-    let sizeMap = new Map<string, string>();
-    if (shouldFetchRelated) {
-      const allMaterials = pendingTasks.flatMap(t => [
-        ...(t.courseWork.materials || []),
-        ...(t.submission.assignmentSubmission?.attachments || [])
-      ]);
-      const fileIds = extractDriveFileIds(allMaterials);
-      if (fileIds.length > 0) sizeMap = await fetchDriveFileSizes(fileIds);
-    }
+    const allMaterials = pendingTasks.flatMap(t => [
+      ...(t.courseWork.materials || []),
+      ...(shouldFetchRelated ? (t.submission.assignmentSubmission?.attachments || []) : [])
+    ]);
+    const fileIds = extractDriveFileIds(allMaterials);
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
 
     emit({ pendingTasks }, globals, (data) => {
       if (data.pendingTasks.length === 0) { 
@@ -149,15 +146,12 @@ export async function handleTasksDueSoon(globals: GlobalFlags, argv: any) {
       return parseDueDate(a.courseWork).getTime() - parseDueDate(b.courseWork).getTime();
     });
 
-    let sizeMap = new Map<string, string>();
-    if (shouldFetchRelated) {
-      const allMaterials = dueSoonTasks.flatMap(t => [
-        ...(t.courseWork.materials || []),
-        ...(t.submission.assignmentSubmission?.attachments || [])
-      ]);
-      const fileIds = extractDriveFileIds(allMaterials);
-      if (fileIds.length > 0) sizeMap = await fetchDriveFileSizes(fileIds);
-    }
+    const allMaterials = dueSoonTasks.flatMap(t => [
+      ...(t.courseWork.materials || []),
+      ...(shouldFetchRelated ? (t.submission.assignmentSubmission?.attachments || []) : [])
+    ]);
+    const fileIds = extractDriveFileIds(allMaterials);
+    const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
 
     emit({ dueSoonTasks }, globals, (data) => {
       if (data.dueSoonTasks.length === 0) {
@@ -190,12 +184,12 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const shouldFetchRelated = argv.related || globals.json;
       const isFull = !!argv.full;
       
-      const fileIds = shouldFetchRelated ? extractDriveFileIds(coursework) : [];
+      const fileIds = extractDriveFileIds(coursework);
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
       const enrichedCoursework = coursework.map((cw: any) => ({
         ...cw,
-        ...(shouldFetchRelated ? { files: extractAttachedFiles(cw.materials, sizeMap) } : {})
+        files: extractAttachedFiles(cw.materials, sizeMap)
       }));
 
       emit({ coursework: enrichedCoursework }, globals, (data) => {
@@ -229,10 +223,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
           }
 
-          if (shouldFetchRelated) {
-            const atts = formatAttachments(cw.materials, sizeMap);
-            if (atts) item.attachments = atts;
-          }
+          const atts = formatAttachments(cw.materials, sizeMap);
+          if (atts) item.attachments = atts;
           return item;
         }));
       });
@@ -263,10 +255,15 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const submission = subRes.data.studentSubmissions?.[0];
       const now = new Date();
       
-      const fileIds = shouldFetchRelated ? extractDriveFileIds([cw, submission]) : [];
+      const fileIds = extractDriveFileIds(shouldFetchRelated ? [cw, submission] : [cw]);
       const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
       
-      emit({ coursework: cw, submission }, globals, (data) => {
+      const enrichedCw = {
+        ...cw,
+        files: extractAttachedFiles(cw.materials, sizeMap)
+      };
+
+      emit({ coursework: enrichedCw, submission }, globals, (data) => {
         if (shouldFetchRelated) console.log(pc.green(`\n✔ Assignment Details:`));
         
         let dueStr = 'No due date';
@@ -303,10 +300,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           if (data.coursework.scheduledTime) item.details!.push(['Scheduled', data.coursework.scheduledTime]);
         }
 
-        if (shouldFetchRelated) {
-          const atts = formatAttachments(data.coursework.materials, sizeMap);
-          if (atts) item.attachments = atts;
-        }
+        const atts = formatAttachments(data.coursework.materials, sizeMap);
+        if (atts) item.attachments = atts;
         
         printBlock([item]);
         
@@ -554,11 +549,11 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
     
-    const fileIds = shouldFetchRelated ? extractDriveFileIds(materials) : [];
+    const fileIds = extractDriveFileIds(materials);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     const enrichedMaterials = materials.map((m: any) => ({
       ...m,
-      ...(shouldFetchRelated ? { files: extractAttachedFiles(m.materials, sizeMap) } : {})
+      files: extractAttachedFiles(m.materials, sizeMap)
     }));
 
     emit({ materials: enrichedMaterials }, globals, (data) => {
@@ -575,10 +570,8 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
         };
         if (isFull && m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
         
-        if (shouldFetchRelated) {
-          const atts = formatAttachments(m.materials, sizeMap);
-          if (atts) item.attachments = atts;
-        }
+        const atts = formatAttachments(m.materials, sizeMap);
+        if (atts) item.attachments = atts;
         return item;
       }));
     });
@@ -600,10 +593,14 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     note(`Fetching material ${materialId}...`, globals);
     const res = await classroom.courses.courseWorkMaterials.get({ courseId, id: materialId });
     const m = res.data;
-    const fileIds = shouldFetchRelated ? extractDriveFileIds([m]) : [];
+    const fileIds = extractDriveFileIds([m]);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
+    const enrichedMat = {
+      ...m,
+      files: extractAttachedFiles(m.materials, sizeMap)
+    };
     
-    emit({ material: m }, globals, (data) => {
+    emit({ material: enrichedMat }, globals, (data) => {
       console.log(pc.green(`\n✔ Material Details:`));
       const mat = data.material;
       const stateColor = mat.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(mat.state || 'UNKNOWN');
@@ -625,10 +622,8 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
         if (mat.scheduledTime) item.details!.push(['Scheduled', mat.scheduledTime]);
       }
       
-      if (shouldFetchRelated) {
-        const atts = formatAttachments(mat.materials, sizeMap);
-        if (atts) item.attachments = atts;
-      }
+      const atts = formatAttachments(mat.materials, sizeMap);
+      if (atts) item.attachments = atts;
       printBlock([item]);
     });
   } else if (verb === 'create') {
@@ -693,10 +688,15 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
     
-    const fileIds = shouldFetchRelated ? extractDriveFileIds(submissions) : [];
+    const fileIds = extractDriveFileIds(submissions);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     
-    emit({ submissions }, globals, (data) => {
+    const enrichedSubmissions = submissions.map((s: any) => ({
+      ...s,
+      files: extractAttachedFiles(s.assignmentSubmission?.attachments, sizeMap)
+    }));
+
+    emit({ submissions: enrichedSubmissions }, globals, (data) => {
       if (data.submissions.length === 0) { 
         console.log(pc.yellow('No submissions found.')); 
         return; 
@@ -716,10 +716,8 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
           ]
         };
         if (isFull && s.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(s.alternateLink))]);
-        if (shouldFetchRelated) {
-          const atts = formatAttachments(s.assignmentSubmission?.attachments, sizeMap);
-          if (atts && atts.length > 0) item.attachments = atts;
-        }
+        const atts = formatAttachments(s.assignmentSubmission?.attachments, sizeMap);
+        if (atts && atts.length > 0) item.attachments = atts;
         return item;
       }));
     });
