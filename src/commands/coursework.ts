@@ -183,11 +183,11 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
     const workId = argv._[3];
     if (!workId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID is required', hint: 'classroom work get <course_id> <work_id>' });
     
-    note(`Fetching coursework ${workId}...`, globals);
+    note(argv.related ? `Fetching coursework ${workId} and its submissions...` : `Fetching coursework ${workId}...`, globals);
     try {
       const [cwRes, subRes] = await Promise.all([
         classroom.courses.courseWork.get({ courseId: id, id: workId }),
-        classroom.courses.courseWork.studentSubmissions.list({ courseId: id, courseWorkId: workId, userId: 'me' }).catch(() => ({ data: { studentSubmissions: [] } }))
+        argv.related ? classroom.courses.courseWork.studentSubmissions.list({ courseId: id, courseWorkId: workId, userId: 'me' }).catch(() => ({ data: { studentSubmissions: [] } })) : Promise.resolve({ data: { studentSubmissions: [] } })
       ]);
       
       const cw = cwRes.data;
@@ -195,7 +195,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       const now = new Date();
       
       emit({ coursework: cw, submission }, globals, (data) => {
-        console.log(pc.green(`\n✔ Assignment Details:`));
+        if (argv.related) console.log(pc.green(`\n✔ Assignment Details:`));
         
         let dueStr = 'No due date';
         if (data.coursework.dueDate) {
@@ -230,7 +230,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         }
         printBlock([item]);
         
-        if (data.submission) {
+        if (argv.related && data.submission) {
           console.log(pc.green(`✔ Your Submission:`));
           const subStateColor = data.submission.state === 'TURNED_IN' ? pc.green('TURNED IN') : 
                                 data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
@@ -300,11 +300,11 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     const topicId = argv._[3];
     if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <course_id> <topic_id>' });
     
-    note(`Fetching topic ${topicId}...`, globals);
+    note(argv.related ? `Fetching topic ${topicId} and its materials...` : `Fetching topic ${topicId}...`, globals);
     const [topicRes, cwRes, matRes] = await Promise.all([
       classroom.courses.topics.get({ courseId, id: topicId }),
-      classroom.courses.courseWork.list({ courseId }),
-      classroom.courses.courseWorkMaterials.list({ courseId })
+      argv.related ? classroom.courses.courseWork.list({ courseId }).catch(() => ({ data: { courseWork: [] } })) : Promise.resolve({ data: { courseWork: [] } }),
+      argv.related ? classroom.courses.courseWorkMaterials.list({ courseId }).catch(() => ({ data: { courseWorkMaterial: [] } })) : Promise.resolve({ data: { courseWorkMaterial: [] } })
     ]);
     
     const topic = topicRes.data;
@@ -312,59 +312,61 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     const materials = (matRes.data.courseWorkMaterial || []).filter(m => m.topicId === topicId);
     
     emit({ topic, coursework, materials }, globals, (data) => {
-      console.log(pc.green(`\n✔ Topic:`));
+      if (argv.related) console.log(pc.green(`\n✔ Topic:`));
       printBlock([{
         title: data.topic.name,
         id: data.topic.topicId,
         details: [['Updated', data.topic.updateTime]]
       }]);
       
-      if (data.materials.length > 0) {
-        console.log(pc.green(`\n✔ Materials under this topic:`));
-        printBlock(data.materials.map((m: any) => {
-          const item: BlockItem = {
-            title: m.title,
-            id: m.id,
-            details: [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]]
-          };
-          if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-          
-          if (m.materials && m.materials.length > 0) {
-            item.attachments = m.materials.map((att: any) => {
-              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-              return 'Unknown Attachment';
-            });
-          }
-          return item;
-        }));
-      } else {
-        console.log(pc.dim('\nNo materials under this topic.'));
-      }
-      
-      if (data.coursework.length > 0) {
-        console.log(pc.green(`\n✔ Assignments under this topic:`));
-        printBlock(data.coursework.map((cw: any) => {
-          const item: BlockItem = {
-            title: cw.title,
-            id: cw.id,
-            details: [['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')]]
-          };
-          if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
-          
-          if (cw.materials && cw.materials.length > 0) {
-            item.attachments = cw.materials.map((att: any) => {
-              if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
-              if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
-              if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
-              return 'Unknown Attachment';
-            });
-          }
-          return item;
-        }));
-      } else {
-        console.log(pc.dim('\nNo assignments under this topic.'));
+      if (argv.related) {
+        if (data.materials.length > 0) {
+          console.log(pc.green(`\n✔ Materials under this topic:`));
+          printBlock(data.materials.map((m: any) => {
+            const item: BlockItem = {
+              title: m.title,
+              id: m.id,
+              details: [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]]
+            };
+            if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+            
+            if (m.materials && m.materials.length > 0) {
+              item.attachments = m.materials.map((att: any) => {
+                if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+                if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+                if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+                return 'Unknown Attachment';
+              });
+            }
+            return item;
+          }));
+        } else {
+          console.log(pc.dim('\nNo materials under this topic.'));
+        }
+        
+        if (data.coursework.length > 0) {
+          console.log(pc.green(`\n✔ Assignments under this topic:`));
+          printBlock(data.coursework.map((cw: any) => {
+            const item: BlockItem = {
+              title: cw.title,
+              id: cw.id,
+              details: [['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')]]
+            };
+            if (cw.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+            
+            if (cw.materials && cw.materials.length > 0) {
+              item.attachments = cw.materials.map((att: any) => {
+                if (att.driveFile?.driveFile) return `📄 ${att.driveFile.driveFile.title}`;
+                if (att.link) return `🔗 ${pc.blue(pc.underline(att.link.url))}`;
+                if (att.youtubeVideo) return `▶️ ${att.youtubeVideo.title}`;
+                return 'Unknown Attachment';
+              });
+            }
+            return item;
+          }));
+        } else {
+          console.log(pc.dim('\nNo assignments under this topic.'));
+        }
       }
     });
   } else if (verb === 'create') {

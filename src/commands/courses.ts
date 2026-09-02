@@ -52,12 +52,12 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     const id = argv._[2];
     if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Course ID is required', hint: 'classroom course get <id>' });
     
-    note(`Fetching course ${id} and its related data...`, globals);
+    note(argv.related ? `Fetching course ${id} and its related data...` : `Fetching course ${id}...`, globals);
     try {
       const [courseRes, teachersRes, topicsRes] = await Promise.all([
         classroom.courses.get({ id }),
-        classroom.courses.teachers.list({ courseId: id }).catch(() => ({ data: { teachers: [] } })),
-        classroom.courses.topics.list({ courseId: id }).catch(() => ({ data: { topic: [] } }))
+        argv.related ? classroom.courses.teachers.list({ courseId: id }).catch(() => ({ data: { teachers: [] } })) : Promise.resolve({ data: { teachers: [] } }),
+        argv.related ? classroom.courses.topics.list({ courseId: id }).catch(() => ({ data: { topic: [] } })) : Promise.resolve({ data: { topic: [] } })
       ]);
       
       const course = courseRes.data;
@@ -65,19 +65,19 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       const topics = topicsRes.data.topic || [];
       
       emit({ course, teachers, topics }, globals, (data) => {
-        console.log(pc.green(`\n✔ Course Details:`));
+        if (argv.related) console.log(pc.green(`\n✔ Course Details:`));
         const courseBlock = getCourseBlock(data.course, !!argv.full);
         
-        if (data.teachers.length > 0) {
+        if (argv.related && data.teachers.length > 0) {
           courseBlock.details!.push(['Teachers', data.teachers.map((t: any) => t.profile?.name?.fullName || t.userId).join(', ')]);
         }
-        if (data.topics.length > 0) {
+        if (argv.related && data.topics.length > 0) {
           courseBlock.details!.push(['Topics', String(data.topics.length)]);
         }
         
         printBlock([courseBlock]);
         
-        if (data.topics.length > 0) {
+        if (argv.related && data.topics.length > 0) {
           console.log(pc.green(`✔ Topics:`));
           printBlock(data.topics.map((t: any) => ({
             title: t.name,

@@ -18,7 +18,7 @@ async function main() {
   
   // Strict flag validation
   const allowedFlags = new Set([
-    'json', 'help', 'h', 'full',
+    'json', 'help', 'h', 'full', 'related',
     'name', 'section', 'status', 'email', 'role',
     'text', 'title', 'link', 'file', 'dest', 'score', 'topic'
   ]);
@@ -68,7 +68,7 @@ async function main() {
       
       printCategory('Courses & Rosters', [
         ['course list', 'List active courses'],
-        ['course get <id>', 'Get details of a course and its topics'],
+        ['course get <id>', 'Get details of a course (use --related to see topics/teachers)'],
         ['course create', 'Create a course (requires --name)'],
         ['course update <id>', 'Update a course status (requires --status)'],
         ['roster list <id>', 'List students (or use --role=teacher)'],
@@ -81,10 +81,10 @@ async function main() {
         ['stream get <course_id> <id>', 'View announcement details'],
         ['stream post <id>', 'Post announcement (requires --text)'],
         ['work list <id>', 'List coursework'],
-        ['work get <course_id> <id>', 'View assignment details and your submission'],
+        ['work get <course_id> <id>', 'View assignment details (use --related to see your submission)'],
         ['work create <id>', 'Create an assignment (requires --title)'],
         ['topic list <course_id>', 'List topics in a course'],
-        ['topic get <course_id> <id>', 'View topic details, materials, and assignments'],
+        ['topic get <course_id> <id>', 'View topic details (use --related to see materials/assignments)'],
         ['topic create <course_id>', 'Create a new topic (requires --name)'],
         ['material list <id>', 'List classwork materials'],
         ['material get <course_id> <id>', 'View material details'],
