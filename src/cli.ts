@@ -18,7 +18,7 @@ async function main() {
   
   // Strict flag validation
   const allowedFlags = new Set([
-    'json', 'help', 'h', 'full', 'related', 'from', 'last',
+    'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
     'text', 'title', 'link', 'file', 'dest', 'score', 'topic'
   ]);

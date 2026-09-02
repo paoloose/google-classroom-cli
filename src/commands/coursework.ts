@@ -548,7 +548,8 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
-    
+    const isDetailed = !!argv.detailed;
+
     const fileIds = extractDriveFileIds(materials);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     const enrichedMaterials = materials.map((m: any) => ({
@@ -557,9 +558,9 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     }));
 
     emit({ materials: enrichedMaterials }, globals, (data) => {
-      if (data.materials.length === 0) { 
-        console.log(pc.yellow('No materials found.')); 
-        return; 
+      if (data.materials.length === 0) {
+        console.log(pc.yellow('No materials found.'));
+        return;
       }
       printBlock(data.materials.map((m: any) => {
         const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
@@ -568,8 +569,44 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           id: m.id,
           details: [['State', stateColor]]
         };
-        if (isFull && m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
-        
+
+        // Default tier — relevant fields visible without opt-ins.
+        if (m.creationTime) item.details!.push(['Created', m.creationTime]);
+        if (m.updateTime) item.details!.push(['Updated', m.updateTime]);
+        if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+        if (m.description) item.details!.push(['Description', m.description.split('\n')[0] + (m.description.includes('\n') ? '...' : '')]);
+
+        // --full — exhaustive API metadata.
+        if (isFull) {
+          if (m.courseId) item.details!.push(['Course ID', m.courseId]);
+          if (m.topicId) item.details!.push(['Topic ID', m.topicId]);
+          if (m.creatorUserId) item.details!.push(['Creator ID', m.creatorUserId]);
+          if (m.scheduledTime) item.details!.push(['Scheduled', m.scheduledTime]);
+        }
+
+        // --detailed — per-attachment breakdown beyond the standard
+        // attachment summary (counts + per-type tallies).
+        if (isDetailed && Array.isArray(m.materials) && m.materials.length > 0) {
+          const files = Array.isArray(m.files) ? m.files : [];
+          const driveCount = files.filter((f: any) => f.type === 'driveFile').length;
+          const linkCount = files.filter((f: any) => f.type === 'link').length;
+          const youtubeCount = files.filter((f: any) => f.type === 'youtube').length;
+          const formCount = files.filter((f: any) => f.type === 'form').length;
+          const otherCount = files.length - driveCount - linkCount - youtubeCount - formCount;
+          const tally: string[] = [];
+          if (driveCount) tally.push(`${driveCount} file${driveCount === 1 ? '' : 's'}`);
+          if (linkCount) tally.push(`${linkCount} link${linkCount === 1 ? '' : 's'}`);
+          if (youtubeCount) tally.push(`${youtubeCount} video${youtubeCount === 1 ? '' : 's'}`);
+          if (formCount) tally.push(`${formCount} form${formCount === 1 ? '' : 's'}`);
+          if (otherCount > 0) tally.push(`${otherCount} other`);
+          if (tally.length > 0) item.details!.push(['Attachments', tally.join(', ')]);
+
+          if (m.materials.some((att: any) => att.shareMode)) {
+            const shareModes = Array.from(new Set(m.materials.map((att: any) => att.shareMode).filter(Boolean)));
+            if (shareModes.length > 0) item.details!.push(['Share Mode', shareModes.join(', ')]);
+          }
+        }
+
         const atts = formatAttachments(m.materials, sizeMap);
         if (atts) item.attachments = atts;
         return item;

@@ -102,6 +102,18 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
+## Verbosity Flags
+
+Most commands accept up to three verbosity tiers:
+
+| Tier       | Flag          | Adds                                                         |
+|------------|---------------|--------------------------------------------------------------|
+| Default    | _(none)_      | State, Created, Updated, Link, Description (when present)    |
+| Exhaustive | `--full`      | + Course ID, Topic ID, Creator ID, Scheduled time            |
+| Detailed   | `--detailed`  | + per-attachment type tally (files / links / videos / forms) and Share Mode info |
+
+`--full` and `--detailed` can be combined to get every field at once. Tier differences are most visible in `material list` / `course get`; other commands fall back to a binary default-vs-`--full` model.
+
 ## Global Filtering Flags
 
 Every list-style command (`course list`, `work list`, `stream list`, `material list`, `topic list`, `submissions list`, `tasks pending`, `tasks due-soon`, plus the related sub-blocks of `get` commands) accepts two optional flags that filter the returned items by date.
