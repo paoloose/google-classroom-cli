@@ -11,6 +11,7 @@ import { handleRoster } from './commands/rosters.js';
 import { handleCourseWork, handleTopic, handleMaterial, handleSubmissions, handleStudentAction, handleTasksPending, handleTasksDueSoon } from './commands/coursework.js';
 import { handleStream } from './commands/stream.js';
 import { handleGuardians } from './commands/guardians.js';
+import pc from 'picocolors';
 
 async function main() {
   const argv = parseArgv(process.argv.slice(2));
@@ -31,46 +32,70 @@ async function main() {
   }
 
   if (argv.help || argv.h || argv._.length === 0) {
-    if (!globals.json) printBanner({ name: 'Classroom', tagline: 'Classroom CLI' });
-    console.error('Usage: classroom <noun> <verb> [options]');
-    console.error('Core:');
-    console.error('  auth login            Authenticate');
-    console.error('  auth logout           Clear credentials');
-    console.error('Courses & Rosters:');
-    console.error('  course list           List active courses');
-    console.error('  course get <id>       Get details of a course');
-    console.error('  course create         Create a course (requires --name)');
-    console.error('  course update <id>    Update a course status (requires --status)');
-    console.error('  roster list <id>      List students (or use --role=teacher)');
-    console.error('  roster add <id>       Add a user (requires --email, optional --role=teacher)');
-    console.error('  roster remove <id>    Remove a user (requires --email)');
-    console.error('Coursework & Content:');
-    console.error('  stream list <id>      List announcements');
-    console.error('  stream get <course_id> <announcement_id>  View announcement details');
-    console.error('  stream post <id>      Post announcement (requires --text)');
-    console.error('  work list <id>        List coursework');
-    console.error('  work get <course_id> <work_id>     View assignment details and your submission');
-    console.error('  work create <id>      Create an assignment (requires --title)');
-    console.error('  topic list <course_id>             List topics in a course');
-    console.error('  topic get <course_id> <topic_id>   View topic details, including its materials and assignments');
-    console.error('  topic create <course_id> --name=... Create a new topic');
-    console.error('  material list <id>    List classwork materials');
-    console.error('  material get <course_id> <material_id>  View material details');
-    console.error('  material create <id>  Create material (requires --title, supports --file/--link)');
-    console.error('  drive download <id>   Download a Drive file (optional --dest)');
-    console.error('Grading & Submissions (Teachers):');
-    console.error('  submissions list <course_id> <work_id>');
-    console.error('  submissions grade <course_id> <work_id> <student_id> (requires --score)');
-    console.error('  submissions return <course_id> <work_id> <student_id>');
-    console.error('Student Actions:');
-    console.error('  submit <course_id> <work_id>       Attach a link (requires --link)');
-    console.error('  turn-in <course_id> <work_id>      Turn in assignment');
-    console.error('  unsubmit <course_id> <work_id>     Unsubmit assignment');
-    console.error('  tasks pending                      Global list of pending tasks');
-    console.error('  tasks due-soon                     Global list of tasks due in 7 days');
-    console.error('Parents/Guardians:');
-    console.error('  guardian list <student_id>         List guardians');
-    console.error('  guardian invite <student_id>       Invite a guardian (requires --email)');
+    if (!globals.json) {
+      const g = pc.blue('G') + pc.red('o') + pc.yellow('o') + pc.blue('g') + pc.green('l') + pc.red('e');
+      console.error(`\n  📝 ${pc.bold(`${g} Classroom CLI`)}\n`);
+      console.error(`  ${pc.dim('Usage:')} ${pc.cyan('classroom')} ${pc.green('<noun>')} ${pc.magenta('<verb>')} ${pc.yellow('[options]')}\n`);
+      
+      const printCategory = (title: string, cmds: [string, string][]) => {
+        console.error(pc.bold(pc.white(title)));
+        const maxLen = Math.max(...cmds.map(c => c[0].length));
+        for (const [cmd, desc] of cmds) {
+          console.error(`  ${pc.cyan(cmd.padEnd(maxLen + 2))} ${pc.dim(desc)}`);
+        }
+        console.error('');
+      };
+      
+      printCategory('Core', [
+        ['auth login', 'Authenticate'],
+        ['auth logout', 'Clear credentials']
+      ]);
+      
+      printCategory('Courses & Rosters', [
+        ['course list', 'List active courses'],
+        ['course get <id>', 'Get details of a course and its topics'],
+        ['course create', 'Create a course (requires --name)'],
+        ['course update <id>', 'Update a course status (requires --status)'],
+        ['roster list <id>', 'List students (or use --role=teacher)'],
+        ['roster add <id>', 'Add a user (requires --email, optional --role=teacher)'],
+        ['roster remove <id>', 'Remove a user (requires --email)']
+      ]);
+      
+      printCategory('Coursework & Content', [
+        ['stream list <id>', 'List announcements'],
+        ['stream get <course_id> <id>', 'View announcement details'],
+        ['stream post <id>', 'Post announcement (requires --text)'],
+        ['work list <id>', 'List coursework'],
+        ['work get <course_id> <id>', 'View assignment details and your submission'],
+        ['work create <id>', 'Create an assignment (requires --title)'],
+        ['topic list <course_id>', 'List topics in a course'],
+        ['topic get <course_id> <id>', 'View topic details, materials, and assignments'],
+        ['topic create <course_id>', 'Create a new topic (requires --name)'],
+        ['material list <id>', 'List classwork materials'],
+        ['material get <course_id> <id>', 'View material details'],
+        ['material create <id>', 'Create material (requires --title, supports --file/--link)'],
+        ['drive download <id>', 'Download a Drive file (optional --dest)']
+      ]);
+      
+      printCategory('Grading & Submissions (Teachers)', [
+        ['submissions list <c_id> <w_id>', 'List all submissions for an assignment'],
+        ['submissions grade <c_id> <w_id> <s_id>', 'Grade a submission (requires --score)'],
+        ['submissions return <c_id> <w_id> <s_id>', 'Return a graded submission to the student']
+      ]);
+      
+      printCategory('Student Actions', [
+        ['submit <c_id> <w_id>', 'Attach a link/file (requires --link/--file)'],
+        ['turn-in <c_id> <w_id>', 'Turn in assignment'],
+        ['unsubmit <c_id> <w_id>', 'Unsubmit assignment'],
+        ['tasks pending', 'Global list of pending tasks across all courses'],
+        ['tasks due-soon', 'Global list of tasks due in the next 7 days']
+      ]);
+      
+      printCategory('Parents/Guardians', [
+        ['guardian list <s_id>', 'List guardians for a student'],
+        ['guardian invite <s_id>', 'Invite a guardian (requires --email)']
+      ]);
+    }
     process.exit(0);
   }
 
