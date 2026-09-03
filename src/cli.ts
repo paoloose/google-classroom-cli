@@ -11,6 +11,7 @@ import { handleCourseWork, handleTopic, handleMaterial, handleSubmissions, handl
 import { handleStream } from './commands/stream.js';
 import { handleGuardians } from './commands/guardians.js';
 import { handleProfile } from './commands/profiles.js';
+import { handleComments } from './commands/comments.js';
 import pc from 'picocolors';
 
 async function main() {
@@ -21,7 +22,7 @@ async function main() {
   const allowedFlags = new Set([
     'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
-    'text', 'title', 'link', 'file', 'dest', 'score', 'topic',
+    'text', 't', 'message', 'm', 'content', 'title', 'link', 'file', 'dest', 'score', 'topic',
     'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn'
   ]);
   for (const key of Object.keys(argv)) {
@@ -113,11 +114,13 @@ async function main() {
       printCategory('Student Actions', [
         ['enroll [id] <code>', 'Join a course with enrollment code or invite link'],
         ['unenroll [id]', 'Leave a course (defaults to selected course)'],
-        ['submit <c_id> <w_id>', 'Attach a link/file (requires --link/--file, --turn-in for full submission)'],
-        ['turn-in <c_id> <w_id>', 'Turn in assignment'],
-        ['unsubmit <c_id> <w_id>', 'Unsubmit assignment'],
-        ['tasks pending', 'Global list of pending tasks across all courses'],
-        ['tasks due-soon', 'Global list of tasks due in the next 7 days']
+        ['submit [c_id] [w_id]', 'Attach a link/file (interactive TUI if no task, --turn-in for full submission)'],
+        ['turn-in [c_id] [w_id]', 'Turn in assignment (interactive TUI if no task)'],
+        ['unsubmit [c_id] [w_id]', 'Unsubmit assignment (interactive TUI if no task)'],
+        ['comment list [c_id] [w_id]', 'List private comments on an assignment'],
+        ['comment post [c_id] [w_id]', 'Post a private comment (supports --text, interactive prompt if omitted)'],
+        ['pending', 'Global list of pending tasks across all courses'],
+        ['due-soon', 'Global list of tasks due in the next 7 days']
       ]);
       
       printCategory('Parents/Guardians', [
@@ -145,6 +148,7 @@ async function main() {
     if (noun === 'material') return await handleMaterial(verb, globals, argv);
     if (noun === 'submissions') return await handleSubmissions(verb, globals, argv);
     if (noun === 'guardian') return await handleGuardians(verb, globals, argv);
+    if (noun === 'comment' || noun === 'comments') return await handleComments(verb, globals, argv);
     
     // Some are slightly renamed/grouped for CLI UX
     if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['work', argv._[1], argv._[2], argv._[3]] });
@@ -165,10 +169,8 @@ async function main() {
       return;
     }
 
-    if (noun === 'tasks') {
-      if (verb === 'pending') return await handleTasksPending(globals, argv);
-      if (verb === 'due-soon') return await handleTasksDueSoon(globals, argv);
-    }
+    if (noun === 'pending') return await handleTasksPending(globals, { ...argv, _: ['pending']});
+    if (noun === 'due-soon') return await handleTasksDueSoon(globals, { ...argv, _: ['due-soon']});
     
     // Backwards compatibility
     if (noun === 'course' && verb === 'stream') return await handleStream('list', globals, { ...argv, _: ['stream', 'list', argv._[2]]});

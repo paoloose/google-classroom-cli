@@ -185,6 +185,8 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom course get <id>` - Get details of a course
 - `classroom course create --name="<name>"` - Create a new course
 - `classroom course update <id> --status=<STATUS>` - Update course status (ACTIVE, ARCHIVED)
+- `classroom course enroll [id] <code>` - Join a course using an enrollment code or invite link
+- `classroom course unenroll [id]` - Leave a course (defaults to selected course)
 - `classroom roster list <id>` - List students in a course
 - `classroom roster add <id> --email="<email>"` - Add a student or teacher
 - `classroom roster remove <id> --email="<email>"` - Remove a student
@@ -206,11 +208,13 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom submissions return <course_id> <work_id> <student_id>` - Return grades to student
 
 ### Student Actions
-- `classroom submit <course_id> <work_id> [--file="<path>"] [--link="<url>"]` - Upload to Google Drive and attach files/links to your submission
-- `classroom turn-in <course_id> <work_id>` - Hand in your submission
-- `classroom unsubmit <course_id> <work_id>` - Retract your submission
-- `classroom tasks pending` - Global aggregator: get all your missing/active work across all active courses
-- `classroom tasks due-soon` - View all assignments due in the next 7 days
+- `classroom submit [course_id] [work_id] [--file="<path>"] [--link="<url>"]` - Upload to Google Drive and attach files/links (interactive TUI if task omitted, pass `--turn-in` to submit and turn in at once)
+- `classroom turn-in [course_id] [work_id]` - Hand in your submission (interactive TUI if task omitted)
+- `classroom unsubmit [course_id] [work_id]` - Retract your submission (interactive TUI if task omitted)
+- `classroom comment list [course_id] [work_id]` - List private comments on an assignment (via Web Engine)
+- `classroom comment post [course_id] [work_id] --text="<content>"` - Post a private comment to the teacher on an assignment (via Web Engine)
+- `classroom pending` - Global aggregator: get all your missing/active work across all active courses
+- `classroom due-soon` - View all assignments due in the next 7 days
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
@@ -228,7 +232,7 @@ Most commands accept up to three verbosity tiers:
 
 ## Global Filtering Flags
 
-Every list-style command (`course list`, `work list`, `stream list`, `material list`, `topic list`, `submissions list`, `tasks pending`, `tasks due-soon`, plus the related sub-blocks of `get` commands) accepts two optional flags that filter the returned items by date.
+Every list-style command (`course list`, `work list`, `stream list`, `material list`, `topic list`, `submissions list`, `pending`, `due-soon`, plus the related sub-blocks of `get` commands) accepts two optional flags that filter the returned items by date.
 
 ### `--from <date>`
 
@@ -283,8 +287,8 @@ You may also use the environment variable `CLI_LAST`.
 | `topic list` / `topic get`             | `updateTime`                      | —            |
 | `stream list` / `stream get`           | `updateTime`                      | —            |
 | `submissions list`                     | `updateTime`                      | `creationTime` |
-| `tasks pending`                        | `dueDate`                         | —            |
-| `tasks due-soon`                       | `dueDate`                         | —            |
+| `pending`                              | `dueDate`                         | —            |
+| `due-soon`                             | `dueDate`                         | —            |
 
 The same filter is also applied to the related sub-blocks (`topics`, `coursework`, `materials`, `stream`) inside `course get` and `topic get`.
 
@@ -335,6 +339,9 @@ Automating the complex, cross-origin Google Drive `<iframe>` File Picker in Pupp
 2. It extracts the Drive file's sharing URL.
 3. The Web Engine navigates to the assignment, clicks **Add or create**, selects the **Link** option, and simply pastes the Drive URL into the input field. Google Classroom automatically detects it as a Drive file and renders the native attachment card!
 
+### Private Comments Automation (`classroom comment`)
+The official Google Classroom REST API does not provide any public endpoint for reading or posting private comments between students and teachers on assignments. The CLI's Web Engine automates opening the assignment view, expanding the private comments drawer, typing the message with native event bindings, and posting the comment seamlessly.
+
 ## 🚧 Roadmap & Work in Progress
 
 While the student workflow is 100% complete and fully resilient against the `@ProjectPermissionDenied` sandbox via the Web Engine, there are a few teacher-oriented features still under development:
@@ -351,3 +358,12 @@ While the student workflow is 100% complete and fully resilient against the `@Pr
    While the Classroom API handles metadata, all physical file attachments live in Google Drive. To use `--file` uploads in materials/submissions or the `classroom drive download` command, you **must** manually enable the "Google Drive API" in your Google Cloud Console project.
 2. **Course Creation States (`@CourseStateDenied`):**
    Depending on your Google Workspace domain policy (or if you are a standard `@gmail.com` user), creating a new course via the CLI may force the course into a `PROVISIONED` state. The API will reject attempts to transition a `PROVISIONED` course directly to `ARCHIVED`. You must accept/activate the course in the Classroom Web UI first.
+3. **Course Enrollment Requires Course ID (`enroll [id] <code>`):**
+   In the Google Classroom Web UI, students can join a class simply by entering a 7-character class code because Google runs an internal global lookup service across all active courses. However, the public Google Classroom REST API (`courses.students.create`) does not offer a global code search endpoint for privacy and security reasons.
+   
+   Instead, the API endpoint is strictly course-scoped (`POST /v1/courses/{courseId}/students`) and requires **both** the numeric `courseId` (to route to the course) and the `enrollmentCode` (as authorization).
+   
+   To simplify this in the CLI:
+   - **Full Invite Link (Recommended):** If you pass the full invite link (e.g. `classroom enroll "https://classroom.google.com/c/ODc2NDQxOTM5MDY2?cjc=abc123x"`), the CLI automatically parses and base64-decodes both the Course ID and the join code.
+   - **Active Context:** If you already selected a course (`classroom course select <id>`), you only need to provide the code: `classroom enroll <code>`.
+   - **Raw Code Only:** If you only have the 7-character code and do not know the numeric Course ID, you should join the class once via the [Classroom Web UI](https://classroom.google.com).
