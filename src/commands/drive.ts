@@ -23,7 +23,7 @@ function getMimeType(filePath: string): string {
   return map[ext] || 'application/octet-stream';
 }
 
-export async function uploadToDrive(filePath: string, globals: any): Promise<string> {
+export async function uploadToDrive(filePath: string, globals: any, courseId?: string): Promise<string> {
   if (!existsSync(filePath)) {
     throw new AppError('FILE_NOT_FOUND', { name: 'FileNotFound', human: `File not found: ${filePath}` });
   }
@@ -37,11 +37,35 @@ export async function uploadToDrive(filePath: string, globals: any): Promise<str
   const fileName = basename(filePath);
   const mimeType = getMimeType(filePath);
 
+  const requestBody: any = {
+    name: fileName,
+    mimeType
+  };
+
+  if (courseId) {
+    try {
+      const { getClient } = await import('../client.js');
+      const classroom = await getClient();
+      const course = (await classroom.courses.get({ id: courseId })).data;
+      
+      // Google Classroom names the Drive folder after the course name and section
+      const folderName = course.section ? `${course.name} ${course.section}` : course.name;
+      
+      const search = await drive.files.list({
+        q: `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id)'
+      });
+      
+      if (search.data.files && search.data.files.length > 0) {
+        requestBody.parents = [search.data.files[0].id];
+      }
+    } catch (error) {
+      // Ignore errors and fallback to root "My Drive"
+    }
+  }
+
   const res = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      mimeType
-    },
+    requestBody,
     media: {
       mimeType,
       body: createReadStream(filePath)

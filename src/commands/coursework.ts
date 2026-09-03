@@ -879,6 +879,55 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
   if (!courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'CourseWork ID is required' });
   const classroom = await getClient();
 
+  // Smart Routing Engine check
+  const cwRes = await classroom.courses.courseWork.get({ courseId, id: courseWorkId });
+  const cw = cwRes.data;
+  
+  if (!cw.associatedWithDeveloper) {
+    const { ProfileManager } = await import('../../cli/foundation/profile.js');
+    const profileManager = new ProfileManager('classroom-cli');
+    const activeProfile = profileManager.getActiveProfile();
+    if (!activeProfile) {
+      throw new AppError('NO_ACTIVE_PROFILE', {
+        name: 'NoActiveProfile',
+        human: 'No active profile found for web automation fallback.',
+        hint: 'Run `classroom auth login` first.'
+      });
+    }
+    if (verb === 'turn-in') {
+      const { executeWebTurnIn } = await import('../web-engine.js');
+      await executeWebTurnIn(activeProfile, courseId, courseWorkId, globals);
+      return;
+    } else if (verb === 'submit') {
+      const rawLinks = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
+      const links = rawLinks.flatMap((l: string) => l.split(',')).map((l: string) => l.trim()).filter(Boolean);
+      
+      const rawFiles = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+      const files = rawFiles.flatMap((f: string) => f.split(',')).map((f: string) => f.trim()).filter(Boolean);
+      
+      const { executeWebSubmit, executeWebTurnIn } = await import('../web-engine.js');
+      await executeWebSubmit(activeProfile, courseId, courseWorkId, links, files, globals);
+      
+      if (argv['turn-in'] || argv['turnIn']) {
+        await executeWebTurnIn(activeProfile, courseId, courseWorkId, globals);
+      } else {
+        console.log(pc.cyan(`\n💡 Hint: Attachments were added but not turned in.`));
+        console.log(pc.cyan(`   Next time, pass the --turn-in flag to do it all at once.`));
+        console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`bun src/cli.ts turn-in ${courseId} ${courseWorkId}`));
+      }
+      return;
+    } else if (verb === 'unsubmit') {
+      const { executeWebUnsubmit } = await import('../web-engine.js');
+      await executeWebUnsubmit(activeProfile, courseId, courseWorkId, globals);
+      return;
+    } else {
+       throw new AppError('WEB_ENGINE_NOT_IMPLEMENTED', {
+         name: 'WebEngineNotImplemented',
+         human: `Web automation fallback is only implemented for turn-in, unsubmit, and submit currently.`
+       });
+    }
+  }
+
   // Find the student's submission id
   const subRes = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId, userId: 'me' });
   const submission = subRes.data.studentSubmissions?.[0];
@@ -886,8 +935,11 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
 
   try {
     if (verb === 'submit') {
-      const links = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
-      const files = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+      const rawLinks = Array.isArray(argv['link']) ? argv['link'] : (argv['link'] ? [argv['link']] : []);
+      const links = rawLinks.flatMap((l: string) => l.split(',')).map((l: string) => l.trim()).filter(Boolean);
+      
+      const rawFiles = Array.isArray(argv['file']) ? argv['file'] : (argv['file'] ? [argv['file']] : []);
+      const files = rawFiles.flatMap((f: string) => f.split(',')).map((f: string) => f.trim()).filter(Boolean);
       
       if (links.length === 0 && files.length === 0) {
         throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'At least one --link or --file is required' });
@@ -902,8 +954,7 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
       if (files.length > 0) {
         const { uploadToDrive } = await import('./drive.js');
         for (const file of files) {
-          note(`Uploading ${file} to Google Drive...`, globals);
-          const fileId = await uploadToDrive(file, globals);
+          const fileId = await uploadToDrive(file, globals, courseId);
           addAttachments.push({ driveFile: { id: fileId } });
         }
       }
@@ -913,7 +964,20 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
         requestBody: { addAttachments }
       });
       
-      emit({ success: true }, globals, () => console.log(`Successfully attached ${addAttachments.length} items to submission.`));
+      if (argv['turn-in'] || argv['turnIn']) {
+        await classroom.courses.courseWork.studentSubmissions.turnIn({
+          courseId, courseWorkId, id: submission.id!
+        });
+        emit({ turnedIn: true }, globals, () => console.log(pc.green(`✔ Assignment submitted and turned in successfully.`)));
+      } else {
+        emit({ submitted: true }, globals, () => {
+          console.log(pc.green(`✔ Attachments added successfully.`));
+          console.log(pc.cyan(`\n💡 Hint: Attachments were added but not turned in.`));
+          console.log(pc.cyan(`   Next time, pass the --turn-in flag to do it all at once.`));
+          console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`bun src/cli.ts turn-in ${courseId} ${courseWorkId}`));
+        });
+      }
+      return;
     } else if (verb === 'turn-in') {
       await classroom.courses.courseWork.studentSubmissions.turnIn({ courseId, courseWorkId, id: submission.id! });
       emit({ success: true }, globals, () => console.log(`Turned in assignment.`));
