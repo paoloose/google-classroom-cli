@@ -42,6 +42,8 @@ export type AppPaths = {
   sessions: string;
   /** Temporary directory for atomic writes. */
   tmp: string;
+  /** Profiles directory. Contains user identity profiles. */
+  profiles: string;
 };
 
 /**
@@ -77,6 +79,7 @@ export function getAppPaths(appName: string): AppPaths {
       audit: join(configDir, "audit"),
       sessions: join(configDir, "sessions"),
       tmp: join(localAppData, appName, "tmp"),
+      profiles: join(localAppData, appName, "profiles"),
     };
   }
 
@@ -94,6 +97,7 @@ export function getAppPaths(appName: string): AppPaths {
     audit: join(xdgState, appName, "audit"),
     sessions: join(configDir, "sessions"),
     tmp: join(xdgCache, appName, "tmp"),
+    profiles: join(xdgState, appName, "profiles"),
   };
 }
 
@@ -102,7 +106,7 @@ export function getAppPaths(appName: string): AppPaths {
  * Permissions: 0o700 for sensitive dirs (sessions), 0o755 for the rest.
  */
 export function ensureHome(paths: AppPaths): void {
-  for (const dir of [paths.config, paths.state, paths.cache, paths.audit, paths.tmp]) {
+  for (const dir of [paths.config, paths.state, paths.cache, paths.audit, paths.tmp, paths.profiles]) {
     mkdirSync(dir, { recursive: true, mode: 0o755 });
   }
   mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
@@ -117,5 +121,6 @@ function buildPaths(root: string): AppPaths {
     audit: join(root, "audit"),
     sessions: join(root, "sessions"),
     tmp: join(root, "tmp"),
+    profiles: join(root, "profiles"),
   };
 }

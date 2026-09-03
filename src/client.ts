@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { AppError } from '../cli/foundation/error-map.js';
 import { loadSession, saveSession } from '../cli/foundation/session.js';
 import { getAppPaths, ensureHome } from '../cli/foundation/xdg-paths.js';
+import { ProfileManager } from '../cli/foundation/profile.js';
 
 const paths = getAppPaths('classroom-cli');
 
@@ -15,11 +16,23 @@ export type SessionData = {
 
 async function getOAuthClient() {
   ensureHome(paths);
-  const session = await loadSession<SessionData>(paths.sessions);
+  
+  const profileManager = new ProfileManager('classroom-cli');
+  const activeProfile = profileManager.getActiveProfile();
+  
+  if (!activeProfile) {
+    throw new AppError('NO_ACTIVE_PROFILE', {
+      name: 'NoActiveProfile',
+      human: 'No active profile found.',
+      hint: 'Run `classroom auth login` or `classroom profile add <name>` first.'
+    });
+  }
+
+  const session = await loadSession<SessionData>(activeProfile.paths.session);
   if (!session?.access_token) {
     throw new AppError('UNAUTHENTICATED', {
       name: 'Unauthenticated',
-      human: 'Not logged in.',
+      human: `Not logged in on profile '${activeProfile.name}'.`,
       hint: 'Run `classroom auth login` first.'
     });
   }
@@ -32,7 +45,7 @@ async function getOAuthClient() {
   
   oauth2Client.on('tokens', (tokens) => {
     if (tokens.access_token) {
-      saveSession(paths.sessions, {
+      saveSession(activeProfile.paths.session, {
         ...session,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || session.refresh_token,

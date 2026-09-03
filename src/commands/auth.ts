@@ -106,7 +106,18 @@ async function runLocalOAuthFlow(clientId: string, clientSecret: string, globals
 
 export async function handleAuth(verb: string | undefined, globals: GlobalFlags, argv: any) {
   ensureHome(paths);
+  
+  const { ProfileManager } = await import('../../cli/foundation/profile.js');
+  const profileManager = new ProfileManager('classroom-cli');
+
   if (verb === 'login') {
+    let activeProfile = profileManager.getActiveProfile();
+    if (!activeProfile) {
+      note('No active profile found. Creating default profile...', globals);
+      activeProfile = profileManager.createProfile('default');
+      profileManager.setActiveProfile('default');
+    }
+
     let clientId = argv['client-id'] || process.env.CLASSROOM_CLIENT_ID;
     let clientSecret = argv['client-secret'] || process.env.CLASSROOM_CLIENT_SECRET;
     
@@ -150,14 +161,14 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
 
     try {
       const tokens = await runLocalOAuthFlow(clientId, clientSecret, globals);
-      await saveSession(paths.sessions, { 
+      await saveSession(activeProfile.paths.session, { 
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         client_id: clientId,
         client_secret: clientSecret,
         createdAt: new Date().toISOString() 
       });
-      emit({ loggedIn: true }, globals, () => console.log(`\nSuccessfully logged in to Google Classroom with all scopes.`));
+      emit({ loggedIn: true, profile: activeProfile.name }, globals, () => console.log(`\nSuccessfully logged in to Google Classroom on profile '${activeProfile.name}'.`));
     } catch (e: any) {
       throw new AppError('OAUTH_FAILED', {
         name: 'OAuthFailed',
@@ -165,8 +176,24 @@ export async function handleAuth(verb: string | undefined, globals: GlobalFlags,
       }, e);
     }
   } else if (verb === 'logout') {
-    await clearSession(paths.sessions);
-    emit({ loggedOut: true }, globals, () => console.log('Logged out.'));
+    const activeProfile = profileManager.getActiveProfile();
+    if (activeProfile) {
+      await clearSession(activeProfile.paths.session);
+      emit({ loggedOut: true, profile: activeProfile.name }, globals, () => console.log(`Logged out of profile '${activeProfile.name}'.`));
+    } else {
+      console.log('No active profile to log out of.');
+    }
+  } else if (verb === 'web-login') {
+    const activeProfile = profileManager.getActiveProfile();
+    if (!activeProfile) {
+      throw new AppError('NO_ACTIVE_PROFILE', {
+        name: 'NoActiveProfile',
+        human: 'No active profile found.',
+        hint: 'Run `classroom auth login` or `classroom profile add <name>` first.'
+      });
+    }
+    const { performWebLoginHandshake } = await import('../web-engine.js');
+    await performWebLoginHandshake(activeProfile, globals);
   } else {
     throw new AppError('UNKNOWN_COMMAND', {
       name: 'UnknownCommand',

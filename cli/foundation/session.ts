@@ -22,7 +22,7 @@ export type SessionBase = {
   expiresAt?: string;
 };
 
-const SESSION_FILE = "current.json";
+const SESSION_FILE = "oauth-session.json";
 
 /**
  * Loads the current session from {sessionsDir}/current.json.
