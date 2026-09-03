@@ -310,12 +310,44 @@ classroom tasks due-soon --last 30d
 classroom course get <course_id> --related --from 2025-01-01
 ```
 
-## ⚠️ Known API Limitations & Quirks
-During the development and dogfooding of this CLI, we uncovered several strict security boundaries enforced by the Google Classroom API:
+## Web Engine Architecture & `@ProjectPermissionDenied` Bypasses
 
-1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`):**
-   Google Classroom strictly prohibits third-party apps from modifying student submissions (attaching files, turning in, or unsubmitting) if the original assignment (`courseWork`) was created manually by a teacher in the Google Classroom Web UI, or by a different Google Cloud project. Attempting to do so will result in a `@ProjectPermissionDenied` error. Student write-actions via this CLI only work on assignments that were originally created via the CLI.
-2. **Google Drive API Requirement:**
+During the development of this CLI, we uncovered a severe restriction in the Google Classroom API:
+
+**The `@ProjectPermissionDenied` Problem:** Google Classroom enforces a strict, isolated permission model where resources (like coursework and grades) are permanently locked to the specific Developer Console project that created them. If a teacher creates an assignment manually via the Google Classroom Web UI, the API treats the Web UI as the "owning project." Consequently, any third-party API integration (even one authorized by the exact same teacher or student) is strictly forbidden from mutating grades, modifying attachments, or turning in submissions. Attempting to do so results in a fatal `403 PERMISSION_DENIED: @ProjectPermissionDenied` error.
+
+To bypass this limitation seamlessly, the CLI implements a **Smart Routing** layer and a **Web Engine Fallback**.
+
+### Smart Routing
+When a user executes a student action (`submit`, `turn-in`, `unsubmit`), the CLI first queries the Classroom API to inspect the assignment. 
+- If `associatedWithDeveloper` is `true`, the CLI executes the action instantly via the high-speed REST API.
+- If `associatedWithDeveloper` is `false`, the CLI intercepts the command, dynamically imports `puppeteer`, and falls back to headless browser automation to simulate a human clicking the Web UI.
+
+### Anti-Bot Bypassing
+Google employs aggressive anti-bot detection during authentication. To survive this, the CLI uses several strategic bypasses:
+- **Native Chrome Spawning:** Injecting cookies into a fresh Puppeteer session triggers device mismatch blocks. Instead, `auth web-login` uses Node's native `spawn` to launch the host OS's actual Google Chrome pointed at the CLI's local `userDataDir`. The user authenticates naturally, and Google mints highly trusted cookies.
+- **Keychain Flag Sabotage:** macOS Chrome encrypts cookies using the OS Keychain. By default, Puppeteer injects `--use-mock-keychain` and `--password-store=basic`, causing it to wipe the trusted session. The CLI strips these default arguments out.
+- **The `?hl=en` Hack:** Google Classroom supports dozens of languages, making regex matching of UI buttons brittle. The Web Engine appends `?hl=en` to all Classroom URLs, forcing the UI to render in English regardless of the user's localized account settings, guaranteeing deterministic element selection.
+
+### Hybrid File Uploads (`classroom submit --file`)
+Automating the complex, cross-origin Google Drive `<iframe>` File Picker in Puppeteer is highly error-prone. The CLI uses a hybrid approach:
+1. It automatically queries the Drive API to find the student's specific `Course Name Section` Classroom folder and silently uploads the local file there via the REST API.
+2. It extracts the Drive file's sharing URL.
+3. The Web Engine navigates to the assignment, clicks **Add or create**, selects the **Link** option, and simply pastes the Drive URL into the input field. Google Classroom automatically detects it as a Drive file and renders the native attachment card!
+
+## 🚧 Roadmap & Work in Progress
+
+While the student workflow is 100% complete and fully resilient against the `@ProjectPermissionDenied` sandbox via the Web Engine, there are a few teacher-oriented features still under development:
+
+1. **Web Engine: `submissions grade`**
+   - Teachers suffer from the exact same API sandbox restrictions as students when trying to assign grades to assignments they created in the Web UI. 
+   - *Status:* WIP. Implementing this fallback requires capturing a DOM snapshot of the specialized React "Grading Tool" iframe to construct reliable Puppeteer selectors.
+2. **Web Engine: `submissions return`**
+   - Similarly, returning an assignment created in the Web UI via the API fails. 
+   - *Status:* WIP. Blocked by the same "Grading Tool" iframe UI complexity as grading.
+
+## ⚠️ Known API Limitations & Quirks
+1. **Google Drive API Requirement:**
    While the Classroom API handles metadata, all physical file attachments live in Google Drive. To use `--file` uploads in materials/submissions or the `classroom drive download` command, you **must** manually enable the "Google Drive API" in your Google Cloud Console project.
-3. **Course Creation States (`@CourseStateDenied`):**
+2. **Course Creation States (`@CourseStateDenied`):**
    Depending on your Google Workspace domain policy (or if you are a standard `@gmail.com` user), creating a new course via the CLI may force the course into a `PROVISIONED` state. The API will reject attempts to transition a `PROVISIONED` course directly to `ARCHIVED`. You must accept/activate the course in the Classroom Web UI first.
