@@ -10,6 +10,7 @@ import { handleRoster } from './commands/rosters.js';
 import { handleCourseWork, handleTopic, handleMaterial, handleSubmissions, handleStudentAction, handleTasksPending, handleTasksDueSoon } from './commands/coursework.js';
 import { handleStream } from './commands/stream.js';
 import { handleGuardians } from './commands/guardians.js';
+import { handleProfile } from './commands/profiles.js';
 import pc from 'picocolors';
 
 async function main() {
@@ -21,7 +22,7 @@ async function main() {
     'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
     'text', 'title', 'link', 'file', 'dest', 'score', 'topic',
-    'code', 'cjc', 'course', 'courseId'
+    'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn'
   ]);
   for (const key of Object.keys(argv)) {
     if (key !== '_' && !allowedFlags.has(key)) {
@@ -63,8 +64,13 @@ async function main() {
       };
       
       printCategory('Core', [
-        ['auth login', 'Authenticate'],
-        ['auth logout', 'Clear credentials']
+        ['profile list', 'List all user profiles'],
+        ['profile use <name>', 'Switch active profile'],
+        ['profile add <name>', 'Create a new profile'],
+        ['profile remove <name>', 'Delete a profile'],
+        ['auth login', 'Authenticate active profile'],
+        ['auth web-login', 'Perform web handshake for active profile'],
+        ['auth logout', 'Clear credentials for active profile']
       ]);
       
       printCategory('Courses & Rosters', [
@@ -107,7 +113,7 @@ async function main() {
       printCategory('Student Actions', [
         ['enroll [id] <code>', 'Join a course with enrollment code or invite link'],
         ['unenroll [id]', 'Leave a course (defaults to selected course)'],
-        ['submit <c_id> <w_id>', 'Attach a link/file (requires --link/--file)'],
+        ['submit <c_id> <w_id>', 'Attach a link/file (requires --link/--file, --turn-in for full submission)'],
         ['turn-in <c_id> <w_id>', 'Turn in assignment'],
         ['unsubmit <c_id> <w_id>', 'Unsubmit assignment'],
         ['tasks pending', 'Global list of pending tasks across all courses'],
@@ -130,6 +136,7 @@ async function main() {
        emit({ version: "1.0" }, globals, (d) => console.log(JSON.stringify(d, null, 2)));
        return;
     }
+    if (noun === 'profile') return await handleProfile(verb, globals, argv);
     if (noun === 'auth') return await handleAuth(verb, globals, argv);
     if (noun === 'course') return await handleCourse(verb, globals, argv);
     if (noun === 'roster') return await handleRoster(verb, globals, argv);
