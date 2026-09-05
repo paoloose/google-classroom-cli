@@ -10,7 +10,7 @@ A powerful, agent-first CLI for interacting with Google Classroom from your term
 npm install -g @paoloose/google-classroom-cli
 ```
 
-That's it. npm automatically downloads only the prebuilt binary for your platform (Linux, macOS, or Windows) — no Bun or Node runtime required beyond npm itself. The `classroom` command will be on your `PATH` immediately.
+That's it. npm automatically downloads only the prebuilt binary for your platform (Linux, macOS, or Windows). No Bun or Node runtime required beyond npm itself. The `classroom` command will be on your `PATH` immediately.
 
 Supported platforms:
 
@@ -263,7 +263,7 @@ Include only items dated on or after `<date>`. ISO 8601 is preferred and tried f
 - **Slash / dotted variants:** `--from 2025/01/31`, `--from 2025.01.31`
 - **Human formats:** `--from "Jan 31, 2025"`
 - **Year omitted:** missing year is filled with the current one.
-- **Year + month only:** missing day is **not** auto-filled — the day is required so the date is unambiguous.
+- **Year + month only:** missing day is **not** auto-filled. The day is required so the date is unambiguous.
 
 You can also pass a bare day number, which resolves to day-N of the current month and year:
 
@@ -281,21 +281,21 @@ Format: `<n>y<n>w<n>m<n>d<n>h<n>m<n>s`
 | --------- | ---------------------------------------------------- |
 | `y`       | years (365d)                                         |
 | `w`       | weeks (7d)                                           |
-| `m`       | months (30d) — first `m` after a year/week is months |
+| `m`       | months (30d). First `m` after a year/week is months  |
 | `d`       | days                                                 |
 | `h`       | hours                                                |
-| `m`       | minutes — second `m` after hours is minutes          |
+| `m`       | minutes. Second `m` after hours is minutes           |
 | `s`       | seconds                                              |
 
 - At least **one** indicator is required.
 - Each indicator may appear **at most once**.
-- Examples: `--last 7d`, `--last 24h`, `--last 1y2m3d`, `--last 30m`, `--last 1w2d`, `--last 1h30m` (invalid — minute indicator repeated).
+- Examples: `--last 7d`, `--last 24h`, `--last 1y2m3d`, `--last 30m`, `--last 1w2d`, `--last 1h30m` (invalid: minute indicator repeated).
 
 You may also use the environment variable `CLI_LAST`.
 
 ### Combining flags
 
-- `--from` and `--last` are **mutually exclusive** — passing both is an error.
+- `--from` and `--last` are **mutually exclusive**. Passing both is an error.
 - Without either flag, every list command behaves exactly as before.
 
 ### Which date is used per command
@@ -304,12 +304,12 @@ You may also use the environment variable `CLI_LAST`.
 | -------------------------------- | ------------------ | -------------- |
 | `course list` / `course get`     | `updateTime`       | `creationTime` |
 | `work list` / `work get`         | `dueDate`          | `updateTime`   |
-| `material list` / `material get` | `updateTime`       | —              |
-| `topic list` / `topic get`       | `updateTime`       | —              |
-| `stream list` / `stream get`     | `updateTime`       | —              |
+| `material list` / `material get` | `updateTime`       | (none)         |
+| `topic list` / `topic get`       | `updateTime`       | (none)         |
+| `stream list` / `stream get`     | `updateTime`       | (none)         |
 | `submissions list`               | `updateTime`       | `creationTime` |
-| `pending`                        | `dueDate`          | —              |
-| `due-soon`                       | `dueDate`          | —              |
+| `pending`                        | `dueDate`          | (none)         |
+| `due-soon`                       | `dueDate`          | (none)         |
 
 The same filter is also applied to the related sub-blocks (`topics`, `coursework`, `materials`, `stream`) inside `course get` and `topic get`.
 
