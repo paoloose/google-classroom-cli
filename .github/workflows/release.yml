@@ -406,25 +406,17 @@ jobs:
 
       - name: Publish to npm
         env:
-          # Bootstrap: NPM_TOKEN (granular access token with publish scope, 2FA
-          # bypass, package scope @paoloose/*) is used for the first publish of
-          # each new package. Trusted Publishing is per-package and only works
-          # for packages that already exist, so the 5 platform-specific packages
-          # need at least one token-based publish before OIDC can take over.
-          #
-          # After this publish succeeds, go to each of the 6 package pages on
-          # npmjs.com and add a GitHub Actions trusted publisher. Then we can
-          # switch back to `--provenance` + OIDC by removing NODE_AUTH_TOKEN and
-          # re-adding `registry-url: https://registry.npmjs.org/` to setup-node.
-          #
-          # Note: `--provenance` is intentionally omitted here. npm enforces
-          # that `--provenance` requires OIDC auth (Trusted Publishing), and
-          # OIDC isn't configured for these new packages yet. The trade-off is
-          # no provenance attestation on the bootstrap publish; we add it back
-          # once each package has Trusted Publishing enabled.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          echo "=== auth debug ==="
+          echo "NODE_AUTH_TOKEN length: ${#NODE_AUTH_TOKEN}"
+          echo "npm version: $(npm --version)"
+          echo "registry: $(npm config get registry)"
+          echo "always-auth: $(npm config get always-auth)"
+          echo "=== try a whoami first ==="
+          npm whoami --registry=https://registry.npmjs.org/ 2>&1 | head -5
+          echo "=== end auth debug ==="
           targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
           for t in "${targets[@]}"; do
             echo "==> publishing @paoloose/google-classroom-cli-${t}"
