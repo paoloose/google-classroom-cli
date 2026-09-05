@@ -9,33 +9,7 @@ import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
 import { parseDueDate } from '../date-utils.js';
 import { getActiveCourse, setActiveCourse, clearActiveCourse, resolveCourseId } from '../context.js';
-
-function parseCourseInvite(arg?: string): { courseId?: string; code?: string } {
-  if (!arg || typeof arg !== 'string') return {};
-  if (arg.includes('classroom.google.com')) {
-    try {
-      const url = new URL(arg.startsWith('http') ? arg : `https://${arg}`);
-      const cjc = url.searchParams.get('cjc');
-      const pathMatch = url.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
-      let courseId: string | undefined;
-      if (pathMatch) {
-        const raw = pathMatch[1];
-        if (/^\d+$/.test(raw)) {
-          courseId = raw;
-        } else {
-          try {
-            const decoded = Buffer.from(raw, 'base64').toString('utf8');
-            if (/^\d+$/.test(decoded)) {
-              courseId = decoded;
-            }
-          } catch {}
-        }
-      }
-      return { courseId, code: cjc || undefined };
-    } catch {}
-  }
-  return {};
-}
+import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 
 function getCourseBlock(c: any, full: boolean = false, isSelected: boolean = false): BlockItem {
   const details: [string, string][] = [];
@@ -255,8 +229,9 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       throw new AppError('API_ERROR', { name: 'ApiError', human: error.message || 'Failed to update course' }, error);
     }
   } else if (verb === 'select') {
-    const explicitId = argv._[2];
-    if (explicitId) {
+    const explicitArg = argv._[2];
+    if (explicitArg) {
+      const explicitId = resolveCourseId(explicitArg);
       note(`Verifying course ${explicitId}...`, globals);
       const res = await classroom.courses.get({ id: explicitId });
       const c = res.data;
@@ -335,16 +310,25 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     const arg1 = argv._[2];
     const arg2 = argv._[3];
 
-    const parsed = parseCourseInvite(arg1);
-    if (parsed.courseId && parsed.code) {
+    const parsed = parseClassroomUrl(arg1);
+    if (parsed.courseId && (parsed.code || arg2)) {
       courseId = parsed.courseId;
-      code = parsed.code;
+      code = arg2 || parsed.code;
     } else if (arg1 && arg2) {
-      courseId = arg1;
-      code = arg2;
+      const p1 = parseClassroomUrl(arg1);
+      const p2 = parseClassroomUrl(arg2);
+      courseId = p1.courseId || decodeClassroomIdentifier(arg1);
+      code = p2.code || arg2;
     } else if (arg1 && !arg2) {
-      code = arg1;
-      courseId = argv['course'] || argv['courseId'] || getActiveCourse()?.id;
+      if (parsed.courseId && parsed.code) {
+        courseId = parsed.courseId;
+        code = parsed.code;
+      } else if (parsed.courseId && !parsed.code) {
+        courseId = parsed.courseId;
+      } else {
+        code = arg1;
+        courseId = argv['course'] || argv['courseId'] || getActiveCourse()?.id;
+      }
     }
 
     if (!code) {

@@ -4,7 +4,8 @@ import { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
-import { getActiveCourse } from '../context.js';
+import { getActiveCourse, resolveCourseId } from '../context.js';
+import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 
 export async function handleComments(verb: string | undefined, globals: GlobalFlags, argv: any) {
   if (verb === 'list') {
@@ -12,21 +13,31 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     let courseWorkId: string | undefined;
 
     if (argv._[3]) {
-      courseId = argv._[2];
-      courseWorkId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else if (argv._[2]) {
-      const active = getActiveCourse();
-      if (active?.id) {
-        courseId = active.id;
-        courseWorkId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        courseWorkId = parsed.courseWorkId || parsed.resourceId;
+      } else if (parsed.courseId && !parsed.courseWorkId && !parsed.resourceId) {
+        courseId = parsed.courseId;
+        courseWorkId = undefined;
       } else {
-        const classroom = await getClient();
-        try {
-          await classroom.courses.get({ id: argv._[2] });
-          courseId = argv._[2];
-          courseWorkId = undefined;
-        } catch {
-          courseWorkId = argv._[2];
+        const active = getActiveCourse();
+        if (active?.id) {
+          courseId = active.id;
+          courseWorkId = parsed.courseWorkId || decodeClassroomIdentifier(argv._[2]);
+        } else {
+          const decoded = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+          const classroom = await getClient();
+          try {
+            await classroom.courses.get({ id: decoded });
+            courseId = decoded;
+            courseWorkId = undefined;
+          } catch {
+            courseWorkId = decoded;
+          }
         }
       }
     } else {
@@ -132,21 +143,31 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     let courseWorkId: string | undefined;
 
     if (argv._[3]) {
-      courseId = argv._[2];
-      courseWorkId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else if (argv._[2]) {
-      const active = getActiveCourse();
-      if (active?.id) {
-        courseId = active.id;
-        courseWorkId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        courseWorkId = parsed.courseWorkId || parsed.resourceId;
+      } else if (parsed.courseId && !parsed.courseWorkId && !parsed.resourceId) {
+        courseId = parsed.courseId;
+        courseWorkId = undefined;
       } else {
-        const classroom = await getClient();
-        try {
-          await classroom.courses.get({ id: argv._[2] });
-          courseId = argv._[2];
-          courseWorkId = undefined;
-        } catch {
-          courseWorkId = argv._[2];
+        const active = getActiveCourse();
+        if (active?.id) {
+          courseId = active.id;
+          courseWorkId = parsed.courseWorkId || decodeClassroomIdentifier(argv._[2]);
+        } else {
+          const decoded = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+          const classroom = await getClient();
+          try {
+            await classroom.courses.get({ id: decoded });
+            courseId = decoded;
+            courseWorkId = undefined;
+          } catch {
+            courseWorkId = decoded;
+          }
         }
       }
     } else {

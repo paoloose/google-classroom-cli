@@ -218,6 +218,27 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
+## 🔗 Direct Link & URL Reference Support
+
+You can pass full Google Classroom URLs directly to any command instead of looking up numeric IDs. The CLI automatically extracts and base64-decodes both the **Course ID** and the **Resource ID** (assignment, material, announcement, topic):
+
+```bash
+# Get or select a course directly by URL:
+classroom course get https://classroom.google.com/c/ODc2NDQxOTM5MDY2
+classroom course select https://classroom.google.com/c/ODc2NDQxOTM5MDY2
+
+# List assignments or stream for a course:
+classroom work list https://classroom.google.com/c/ODc2NDQxOTM5MDY2
+
+# Get assignment details using its full URL (extracts both courseId and workId):
+classroom work get https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
+
+# Submit work, turn in, or comment using the assignment URL:
+classroom submit https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --file="informe.pdf" --turn-in
+classroom comment post https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --text="Listo profesor"
+classroom comment list https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
+```
+
 ## Verbosity Flags
 
 Most commands accept up to three verbosity tiers:

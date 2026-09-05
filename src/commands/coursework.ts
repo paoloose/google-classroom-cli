@@ -8,6 +8,7 @@ import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 import { resolveCourseId, getActiveCourse } from '../context.js';
+import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 
 async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
@@ -242,11 +243,17 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
     let courseId: string;
     let workId: string;
     if (argv._[3]) {
-      courseId = argv._[2];
-      workId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      workId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else {
-      courseId = resolveCourseId(undefined);
-      workId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        workId = parsed.courseWorkId || parsed.resourceId!;
+      } else {
+        courseId = resolveCourseId(undefined);
+        workId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+      }
     }
     if (!workId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID is required', hint: 'classroom work get <work_id>' });
     
@@ -458,11 +465,17 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     let courseId: string;
     let topicId: string;
     if (argv._[3]) {
-      courseId = argv._[2];
-      topicId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      topicId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else {
-      courseId = resolveCourseId(undefined);
-      topicId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.topicId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        topicId = parsed.topicId || parsed.resourceId!;
+      } else {
+        courseId = resolveCourseId(undefined);
+        topicId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+      }
     }
     if (!topicId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Topic ID is required', hint: 'classroom topic get <topic_id>' });
     
@@ -673,11 +686,17 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     let courseId: string;
     let materialId: string;
     if (argv._[3]) {
-      courseId = argv._[2];
-      materialId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      materialId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else {
-      courseId = resolveCourseId(undefined);
-      materialId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.materialId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        materialId = parsed.materialId || parsed.resourceId!;
+      } else {
+        courseId = resolveCourseId(undefined);
+        materialId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+      }
     }
     if (!materialId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Material ID is required', hint: 'classroom material get <material_id>' });
     
@@ -766,11 +785,17 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
     let courseId: string;
     let courseWorkId: string;
     if (argv._[3]) {
-      courseId = argv._[2];
-      courseWorkId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else {
-      courseId = resolveCourseId(undefined);
-      courseWorkId = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        courseWorkId = parsed.courseWorkId || parsed.resourceId!;
+      } else {
+        courseId = resolveCourseId(undefined);
+        courseWorkId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+      }
     }
     if (!courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'CourseWork ID is required', hint: 'classroom submissions list <work_id>' });
     
@@ -820,13 +845,20 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
     let courseWorkId: string;
     let studentId: string;
     if (argv._[4]) {
-      courseId = argv._[2];
-      courseWorkId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
       studentId = argv._[4];
     } else {
-      courseId = resolveCourseId(undefined);
-      courseWorkId = argv._[2];
-      studentId = argv._[3];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        courseWorkId = parsed.courseWorkId || parsed.resourceId!;
+        studentId = argv._[3];
+      } else {
+        courseId = resolveCourseId(undefined);
+        courseWorkId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+        studentId = argv._[3];
+      }
     }
     const score = argv['score'];
     if (!courseWorkId || !studentId || score === undefined) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID, Student ID and --score are required' });
@@ -846,13 +878,20 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
     let courseWorkId: string;
     let studentId: string;
     if (argv._[4]) {
-      courseId = argv._[2];
-      courseWorkId = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
       studentId = argv._[4];
     } else {
-      courseId = resolveCourseId(undefined);
-      courseWorkId = argv._[2];
-      studentId = argv._[3];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        courseWorkId = parsed.courseWorkId || parsed.resourceId!;
+        studentId = argv._[3];
+      } else {
+        courseId = resolveCourseId(undefined);
+        courseWorkId = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+        studentId = argv._[3];
+      }
     }
     if (!courseWorkId || !studentId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Work ID and Student ID are required' });
     const subRes = await classroom.courses.courseWork.studentSubmissions.list({ courseId, courseWorkId, userId: studentId });
@@ -872,20 +911,30 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
   let courseWorkId: string | undefined;
 
   if (argv._[3]) {
-    courseId = argv._[2];
-    courseWorkId = argv._[3];
+    courseId = resolveCourseId(argv._[2]);
+    courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
   } else if (argv._[2]) {
-    const active = getActiveCourse();
-    if (active?.id) {
-      courseId = active.id;
-      courseWorkId = argv._[2];
+    const parsed = parseClassroomUrl(argv._[2]);
+    if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
+      courseId = parsed.courseId;
+      courseWorkId = parsed.courseWorkId || parsed.resourceId;
+    } else if (parsed.courseId && !parsed.courseWorkId && !parsed.resourceId) {
+      courseId = parsed.courseId;
+      courseWorkId = undefined;
     } else {
-      try {
-        await classroom.courses.get({ id: argv._[2] });
-        courseId = argv._[2];
-        courseWorkId = undefined;
-      } catch {
-        courseWorkId = argv._[2];
+      const active = getActiveCourse();
+      if (active?.id) {
+        courseId = active.id;
+        courseWorkId = parsed.courseWorkId || decodeClassroomIdentifier(argv._[2]);
+      } else {
+        const decoded = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+        try {
+          await classroom.courses.get({ id: decoded });
+          courseId = decoded;
+          courseWorkId = undefined;
+        } catch {
+          courseWorkId = decoded;
+        }
       }
     }
   } else {

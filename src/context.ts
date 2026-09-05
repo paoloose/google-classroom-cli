@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from '
 import { join } from 'node:path';
 import { getAppPaths, ensureHome } from '../cli/foundation/xdg-paths.js';
 import { AppError } from '../cli/foundation/error-map.js';
+import { parseClassroomUrl, decodeClassroomIdentifier } from './url-utils.js';
 
 export interface ActiveCourse {
   id: string;
@@ -52,12 +53,16 @@ export function clearActiveCourse(): boolean {
 }
 
 export function resolveCourseId(explicitId?: string): string {
-  if (explicitId) return explicitId;
+  if (explicitId) {
+    const parsed = parseClassroomUrl(explicitId);
+    if (parsed.courseId) return parsed.courseId;
+    return decodeClassroomIdentifier(explicitId) || explicitId;
+  }
   const active = getActiveCourse();
   if (active?.id) return active.id;
   throw new AppError('MISSING_ARG', {
     name: 'MissingCourseId',
     human: 'Course ID is required.',
-    hint: 'Pass a course ID or select one using `classroom course select`.'
+    hint: 'Pass a course ID, course URL, or select one using `classroom course select`.'
   });
 }

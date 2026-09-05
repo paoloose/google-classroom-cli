@@ -7,6 +7,7 @@ import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { resolveCourseId } from '../context.js';
+import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 
 export async function handleStream(verb: string | undefined, globals: GlobalFlags, argv: any) {
   const classroom = await getClient();
@@ -52,11 +53,17 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     let courseId: string;
     let id: string;
     if (argv._[3]) {
-      courseId = argv._[2];
-      id = argv._[3];
+      courseId = resolveCourseId(argv._[2]);
+      id = decodeClassroomIdentifier(argv._[3]) || argv._[3];
     } else {
-      courseId = resolveCourseId(undefined);
-      id = argv._[2];
+      const parsed = parseClassroomUrl(argv._[2]);
+      if (parsed.courseId && (parsed.announcementId || parsed.resourceId)) {
+        courseId = parsed.courseId;
+        id = parsed.announcementId || parsed.resourceId!;
+      } else {
+        courseId = resolveCourseId(undefined);
+        id = decodeClassroomIdentifier(argv._[2]) || argv._[2];
+      }
     }
     if (!id) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'Announcement ID is required', hint: 'classroom stream get <announcement_id>' });
     
