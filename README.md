@@ -4,7 +4,7 @@ A powerful, agent-first CLI for interacting with Google Classroom from your term
 
 ## Installation
 
-### One-line installer (recommended — no clone required)
+### One-line installer
 
 A bash installer ships with every release. By default it pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
 
@@ -24,14 +24,14 @@ By default the CLI lives under `~/.config/classroom-cli/` (XDG on Unix, `%LOCALA
 
 Useful flags (same on both platforms):
 
-| Flag / option                       | Effect                                                         |
-|-------------------------------------|----------------------------------------------------------------|
-| `--version vX.Y.Z` / `-Version vX.Y.Z` | Pin to a specific tag instead of "latest"                   |
-| `--prerelease` / `-Prerelease`      | Include `-beta` / `-rc` releases when resolving "latest"      |
-| `--channel beta` / `-Channel beta`  | Same as `--prerelease` but friendlier                          |
-| `--force` / `-Force`                | Re-download even if the installed version is the same          |
-| `--install-dir <path>` / `-InstallDir <path>` | Override the install root                          |
-| `--dry-run` / `-DryRun`             | Print what would happen, don't touch disk                      |
+| Flag / option                                 | Effect                                                   |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `--version vX.Y.Z` / `-Version vX.Y.Z`        | Pin to a specific tag instead of "latest"                |
+| `--prerelease` / `-Prerelease`                | Include `-beta` / `-rc` releases when resolving "latest" |
+| `--channel beta` / `-Channel beta`            | Same as `--prerelease` but friendlier                    |
+| `--force` / `-Force`                          | Re-download even if the installed version is the same    |
+| `--install-dir <path>` / `-InstallDir <path>` | Override the install root                                |
+| `--dry-run` / `-DryRun`                       | Print what would happen, don't touch disk                |
 
 Examples:
 
@@ -64,30 +64,18 @@ If you have the repository cloned, link it globally with bun:
 bun link
 ```
 
-The link approach runs directly from your working tree — no version pinning, no install dir.
+The link approach runs directly from your working tree: no version pinning, no install dir.
 
 ## Agent Skills
 
-The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills) (`npx skills`). The skill teaches your agent the full feature surface — every command, every verb, the `--from`/`--last` filtering grammar, the `--full`/`--detailed` verbosity tiers, and the active-course-context resolver.
+The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills) (`npx skills`). The skill teaches your agent the full feature surface: every command, every verb, the `--from`/`--last` filtering grammar, the `--full`/`--detailed` verbosity tiers, and the active-course-context resolver.
 
-You don't need to clone this repository to install the skill — `npx skills` can pull it straight from GitHub.
-
-### Install from GitHub (no clone required)
+### Install skills from GitHub (no clone required)
 
 ```bash
 # Install the latest from the public repo
-npx skills add paoloose/google-classroom-cli --skill classroom -y
-
-# Or install into a specific agent
-npx skills add paoloose/google-classroom-cli --skill classroom -a claude-code -y
-npx skills add paoloose/google-classroom-cli --skill classroom -a codex -y
-npx skills add paoloose/google-classroom-cli --skill classroom -a command-code -y
-
-# Globally (across all your projects)
-npx skills add paoloose/google-classroom-cli --skill classroom -g -a claude-code -y
+npx skills add paoloose/google-classroom-cli --skill classroom
 ```
-
-The CLI accepts the GitHub shorthand (`owner/repo`), a full GitHub URL, or a direct path to a skill subdirectory — all documented in the [skills README](https://github.com/vercel-labs/skills#source-formats).
 
 ### Install from a local clone
 
@@ -96,37 +84,15 @@ If you've already cloned the repo:
 ```bash
 # Install into whichever agents are detected
 npx skills add ./skills
-
-# Or target a specific agent
-npx skills add ./skills -a claude-code -y
-npx skills add ./skills -a codex -y
-npx skills add ./skills -a command-code -y
 ```
 
-This writes the skill to `./<agent>/skills/classroom/` so it can be committed with the project and shared with the team. `-g` installs to `~/.<agent>/skills/classroom/` for cross-project use.
-
-### Discovery and lifecycle
-
-```bash
-# List available skills in the remote repo (no install)
-npx skills add paoloose/google-classroom-cli --list
-
-# Keep the installed skill up to date
-npx skills update classroom
-
-# Remove it later
-npx skills remove classroom
-```
-
-Supported agents include Claude Code, Codex, Cursor, Command Code, OpenCode, GitHub Copilot, Gemini CLI, and 70+ others — see the [full list](https://github.com/vercel-labs/skills#supported-agents). Run `npx skills add …` interactively (omit `-y`) to see which agents the CLI detects on your machine.
-
-> **Note:** The skill teaches your agent how to drive the CLI, but it doesn't ship the CLI itself. You'll still need the `classroom` binary on your `PATH` (via `bun link` from this repo, `npm install -g google-classroom-mcp`, or another install method) for the commands to actually run.
+> **Note:** The skill teaches your agent how to drive the CLI, but it doesn't ship the CLI itself. You'll still need the `classroom` binary on your `PATH` for the commands to actually run.
 
 ## Setup & Authentication
 
 Because this CLI interacts with Google Classroom, you need to provide your own Google Cloud OAuth credentials. **This is completely free and requires no credit card.**
 
-### How to get your Client ID and Client Secret (Updated 2026 UI)
+### How to get your Client ID and Client Secret (Updated 2026)
 
 1. **Create a Project:**
    Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
@@ -154,19 +120,21 @@ Because this CLI interacts with Google Classroom, you need to provide your own G
 
 7. **Log In:**
    Run the login command:
+
    ```bash
    classroom auth login
    ```
+
    If you have downloaded the OAuth credentials JSON file from Google Cloud (usually named `client_secret_....json`), you can rename it to `credentials.json` and place it in the app's standard configuration directory. The CLI will automatically detect it!
 
    - **macOS / Linux:** `~/.config/classroom-cli/credentials.json`
    - **Windows:** `%APPDATA%\classroom-cli\credentials.json`
-   
+
    *(Note: You can also just paste the Client ID and Secret when prompted interactively, pass them via `--client-id` and `--client-secret` flags, or set the `CLASSROOM_CLIENT_ID` and `CLASSROOM_CLIENT_SECRET` environment variables).*
 
-### Can I use an API key for authentication?
+### Can I use an Google API key for authentication?
 
-**No.** Although you might see the Google Classroom API listed in the API Key restrictions menu in Google Cloud, API Keys are only designed for accessing public, anonymous data (like embedding a Google Map). 
+**No.** Although you might see the Google Classroom API listed in the API Key restrictions menu in Google Cloud, API Keys are only designed for accessing public, anonymous data (like embedding a Google Map).
 
 Because Google Classroom deals with highly sensitive, private user data, the API requires credentials that "assert a principal" (i.e., it needs to know *who* the human user is). If you attempt to use an API Key, Google will reject the request with the following error:
 
@@ -177,10 +145,12 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 ## Commands
 
 ### Core Auth
+
 - `classroom auth login` - Authenticate (requests all scopes by default)
 - `classroom auth logout` - Clear credentials
 
 ### Courses & Rosters
+
 - `classroom course list` - List active courses
 - `classroom course get <id>` - Get details of a course
 - `classroom course create --name="<name>"` - Create a new course
@@ -192,6 +162,7 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom roster remove <id> --email="<email>"` - Remove a student
 
 ### Coursework & Content
+
 - `classroom stream list <id>` - Get announcements
 - `classroom stream post <id> --text="<text>"` - Post an announcement
 - `classroom work list <id>` - Get assignments for a course
@@ -203,11 +174,13 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom drive download <file_id> [--dest="<path>"]` - Download an attached Google Drive file
 
 ### Grading & Submissions (Teachers)
+
 - `classroom submissions list <course_id> <work_id>` - View all student submissions
 - `classroom submissions grade <course_id> <work_id> <student_id> --score=<num>` - Grade an assignment
 - `classroom submissions return <course_id> <work_id> <student_id>` - Return grades to student
 
 ### Student Actions
+
 - `classroom submit [course_id] [work_id] [--file="<path>"] [--link="<url>"]` - Upload to Google Drive and attach files/links (interactive TUI if task omitted, pass `--turn-in` to submit and turn in at once)
 - `classroom turn-in [course_id] [work_id]` - Hand in your submission (interactive TUI if task omitted)
 - `classroom unsubmit [course_id] [work_id]` - Retract your submission (interactive TUI if task omitted)
@@ -247,11 +220,12 @@ classroom comment list https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQ
 
 Most commands accept up to three verbosity tiers:
 
-| Tier       | Flag          | Adds                                                         |
-|------------|---------------|--------------------------------------------------------------|
-| Default    | _(none)_      | State, Created, Updated, Link, Description (when present)    |
-| Exhaustive | `--full`      | + Course ID, Topic ID, Creator ID, Scheduled time            |
-| Detailed   | `--detailed`  | + per-attachment type tally (files / links / videos / forms) and Share Mode info |
+| Tier       | Flag         | Adds                                                                             |
+| ---------- | ------------ | -------------------------------------------------------------------------------- |
+| Default    | *(none)*     | State, Created, Updated, Link, Description (when present)                        |
+| Exhaustive | `--full`     | + Course ID, Topic ID, Creator ID, Scheduled time                                |
+| Detailed   | `--detailed` | + per-attachment type tally (files / links / videos / forms) and Share Mode info |
+|            |              |                                                                                  |
 
 `--full` and `--detailed` can be combined to get every field at once. Tier differences are most visible in `material list` / `course get`; other commands fall back to a binary default-vs-`--full` model.
 
@@ -281,15 +255,15 @@ Include only items dated within the last `<duration>` from now. This is a shortc
 
 Format: `<n>y<n>w<n>m<n>d<n>h<n>m<n>s`
 
-| Indicator | Meaning     |
-|-----------|-------------|
-| `y`       | years (365d)|
-| `w`       | weeks (7d)  |
-| `m`       | months (30d) — first `m` after a year/week is months|
-| `d`       | days        |
-| `h`       | hours       |
-| `m`       | minutes — second `m` after hours is minutes|
-| `s`       | seconds     |
+| Indicator | Meaning                                              |
+| --------- | ---------------------------------------------------- |
+| `y`       | years (365d)                                         |
+| `w`       | weeks (7d)                                           |
+| `m`       | months (30d) — first `m` after a year/week is months |
+| `d`       | days                                                 |
+| `h`       | hours                                                |
+| `m`       | minutes — second `m` after hours is minutes          |
+| `s`       | seconds                                              |
 
 - At least **one** indicator is required.
 - Each indicator may appear **at most once**.
@@ -304,16 +278,16 @@ You may also use the environment variable `CLI_LAST`.
 
 ### Which date is used per command
 
-| Command                                | Primary date field                | Fallback     |
-|----------------------------------------|-----------------------------------|--------------|
-| `course list` / `course get`           | `updateTime`                      | `creationTime` |
-| `work list` / `work get`               | `dueDate`                         | `updateTime` |
-| `material list` / `material get`       | `updateTime`                      | —            |
-| `topic list` / `topic get`             | `updateTime`                      | —            |
-| `stream list` / `stream get`           | `updateTime`                      | —            |
-| `submissions list`                     | `updateTime`                      | `creationTime` |
-| `pending`                              | `dueDate`                         | —            |
-| `due-soon`                             | `dueDate`                         | —            |
+| Command                          | Primary date field | Fallback       |
+| -------------------------------- | ------------------ | -------------- |
+| `course list` / `course get`     | `updateTime`       | `creationTime` |
+| `work list` / `work get`         | `dueDate`          | `updateTime`   |
+| `material list` / `material get` | `updateTime`       | —              |
+| `topic list` / `topic get`       | `updateTime`       | —              |
+| `stream list` / `stream get`     | `updateTime`       | —              |
+| `submissions list`               | `updateTime`       | `creationTime` |
+| `pending`                        | `dueDate`          | —              |
+| `due-soon`                       | `dueDate`          | —              |
 
 The same filter is also applied to the related sub-blocks (`topics`, `coursework`, `materials`, `stream`) inside `course get` and `topic get`.
 
@@ -348,23 +322,30 @@ During the development of this CLI, we uncovered a severe restriction in the Goo
 To bypass this limitation seamlessly, the CLI implements a **Smart Routing** layer and a **Web Engine Fallback**.
 
 ### Smart Routing
-When a user executes a student action (`submit`, `turn-in`, `unsubmit`), the CLI first queries the Classroom API to inspect the assignment. 
+
+When a user executes a student action (`submit`, `turn-in`, `unsubmit`), the CLI first queries the Classroom API to inspect the assignment.
+
 - If `associatedWithDeveloper` is `true`, the CLI executes the action instantly via the high-speed REST API.
 - If `associatedWithDeveloper` is `false`, the CLI intercepts the command, dynamically imports `puppeteer`, and falls back to headless browser automation to simulate a human clicking the Web UI.
 
 ### Anti-Bot Bypassing
+
 Google employs aggressive anti-bot detection during authentication. To survive this, the CLI uses several strategic bypasses:
+
 - **Native Chrome Spawning:** Injecting cookies into a fresh Puppeteer session triggers device mismatch blocks. Instead, `auth web-login` uses Node's native `spawn` to launch the host OS's actual Google Chrome pointed at the CLI's local `userDataDir`. The user authenticates naturally, and Google mints highly trusted cookies.
 - **Keychain Flag Sabotage:** macOS Chrome encrypts cookies using the OS Keychain. By default, Puppeteer injects `--use-mock-keychain` and `--password-store=basic`, causing it to wipe the trusted session. The CLI strips these default arguments out.
 - **The `?hl=en` Hack:** Google Classroom supports dozens of languages, making regex matching of UI buttons brittle. The Web Engine appends `?hl=en` to all Classroom URLs, forcing the UI to render in English regardless of the user's localized account settings, guaranteeing deterministic element selection.
 
 ### Hybrid File Uploads (`classroom submit --file`)
+
 Automating the complex, cross-origin Google Drive `<iframe>` File Picker in Puppeteer is highly error-prone. The CLI uses a hybrid approach:
+
 1. It automatically queries the Drive API to find the student's specific `Course Name Section` Classroom folder and silently uploads the local file there via the REST API.
 2. It extracts the Drive file's sharing URL.
 3. The Web Engine navigates to the assignment, clicks **Add or create**, selects the **Link** option, and simply pastes the Drive URL into the input field. Google Classroom automatically detects it as a Drive file and renders the native attachment card!
 
 ### Private Comments Automation (`classroom comment`)
+
 The official Google Classroom REST API does not provide any public endpoint for reading or posting private comments between students and teachers on assignments. The CLI's Web Engine automates opening the assignment view, expanding the private comments drawer, typing the message with native event bindings, and posting the comment seamlessly.
 
 ## 🚧 Roadmap & Work in Progress
@@ -372,22 +353,23 @@ The official Google Classroom REST API does not provide any public endpoint for 
 While the student workflow is 100% complete and fully resilient against the `@ProjectPermissionDenied` sandbox via the Web Engine, there are a few teacher-oriented features still under development:
 
 1. **Web Engine: `submissions grade`**
-   - Teachers suffer from the exact same API sandbox restrictions as students when trying to assign grades to assignments they created in the Web UI. 
+   - Teachers suffer from the exact same API sandbox restrictions as students when trying to assign grades to assignments they created in the Web UI.
    - *Status:* WIP. Implementing this fallback requires capturing a DOM snapshot of the specialized React "Grading Tool" iframe to construct reliable Puppeteer selectors.
 2. **Web Engine: `submissions return`**
-   - Similarly, returning an assignment created in the Web UI via the API fails. 
+   - Similarly, returning an assignment created in the Web UI via the API fails.
    - *Status:* WIP. Blocked by the same "Grading Tool" iframe UI complexity as grading.
 
 ## ⚠️ Known API Limitations & Quirks
+
 1. **Google Drive API Requirement:**
    While the Classroom API handles metadata, all physical file attachments live in Google Drive. To use `--file` uploads in materials/submissions or the `classroom drive download` command, you **must** manually enable the "Google Drive API" in your Google Cloud Console project.
 2. **Course Creation States (`@CourseStateDenied`):**
    Depending on your Google Workspace domain policy (or if you are a standard `@gmail.com` user), creating a new course via the CLI may force the course into a `PROVISIONED` state. The API will reject attempts to transition a `PROVISIONED` course directly to `ARCHIVED`. You must accept/activate the course in the Classroom Web UI first.
 3. **Course Enrollment Requires Course ID (`enroll [id] <code>`):**
    In the Google Classroom Web UI, students can join a class simply by entering a 7-character class code because Google runs an internal global lookup service across all active courses. However, the public Google Classroom REST API (`courses.students.create`) does not offer a global code search endpoint for privacy and security reasons.
-   
+
    Instead, the API endpoint is strictly course-scoped (`POST /v1/courses/{courseId}/students`) and requires **both** the numeric `courseId` (to route to the course) and the `enrollmentCode` (as authorization).
-   
+
    To simplify this in the CLI:
    - **Full Invite Link (Recommended):** If you pass the full invite link (e.g. `classroom enroll "https://classroom.google.com/c/ODc2NDQxOTM5MDY2?cjc=abc123x"`), the CLI automatically parses and base64-decodes both the Course ID and the join code.
    - **Active Context:** If you already selected a course (`classroom course select <id>`), you only need to provide the code: `classroom enroll <code>`.

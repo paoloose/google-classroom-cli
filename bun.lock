@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "google-classroom-mcp",
+      "name": "google-classroom-cli",
       "dependencies": {
         "@clack/prompts": "^1.7.0",
         "agent-browser": "^0.36.0",
