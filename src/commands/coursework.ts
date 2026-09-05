@@ -1,10 +1,10 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
-import { printBlock, BlockItem } from '../ui.js';
+import { printBlock, type BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 import { resolveCourseId, getActiveCourse } from '../context.js';
@@ -276,7 +276,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
       
       const enrichedCw = {
         ...cw,
-        files: extractAttachedFiles(cw.materials, sizeMap)
+        files: extractAttachedFiles(cw.materials || [], sizeMap)
       };
 
       emit({ coursework: enrichedCw, submission }, globals, (data) => {
@@ -293,8 +293,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
         const stateColor = data.coursework.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(data.coursework.state || 'UNKNOWN');
         
         const item: BlockItem = {
-          title: data.coursework.title,
-          id: data.coursework.id,
+          title: data.coursework.title || 'Untitled Assignment',
+          id: data.coursework.id || undefined,
           details: [
             ['State', stateColor],
             ['Due', data.coursework.dueDate ? pc.yellow(dueStr) : dueStr],
@@ -316,7 +316,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
           if (data.coursework.scheduledTime) item.details!.push(['Scheduled', data.coursework.scheduledTime]);
         }
 
-        const atts = formatAttachments(data.coursework.materials, sizeMap);
+        const atts = formatAttachments(data.coursework.materials || [], sizeMap);
         if (atts) item.attachments = atts;
         
         printBlock([item]);
@@ -327,8 +327,8 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
                                 data.submission.state === 'RETURNED' ? pc.blue('RETURNED') : 
                                 pc.yellow(data.submission.state || 'UNKNOWN');
           const subItem: BlockItem = {
-            title: `Student ${data.submission.userId}`,
-            id: data.submission.id,
+            title: `Student ${data.submission.userId || 'Me'}`,
+            id: data.submission.id || undefined,
             details: [
               ['State', subStateColor]
             ]
@@ -348,7 +348,7 @@ export async function handleCourseWork(globals: GlobalFlags, argv: any) {
             if (data.submission.alternateLink) subItem.details!.push(['Link', pc.blue(pc.underline(data.submission.alternateLink))]);
           }
           
-          const subAtts = formatAttachments(data.submission.assignmentSubmission?.attachments, sizeMap);
+          const subAtts = formatAttachments(data.submission.assignmentSubmission?.attachments || [], sizeMap);
           if (subAtts && subAtts.length > 0) {
             subItem.attachments = subAtts;
           } else {
@@ -512,8 +512,8 @@ export async function handleTopic(verb: string | undefined, globals: GlobalFlags
     emit({ topic, coursework: enrichedCw, materials: enrichedMat }, globals, (data) => {
       if (shouldFetchRelated) console.log(pc.green(`\n✔ Topic:`));
       const topicItem: BlockItem = { 
-        title: data.topic.name, 
-        id: data.topic.topicId,
+        title: data.topic.name || 'Untitled Topic', 
+        id: data.topic.topicId || undefined,
         details: [
           ...(data.topic.updateTime ? [['Updated', data.topic.updateTime] as [string, string]] : [])
         ]
@@ -710,7 +710,7 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     const enrichedMat = {
       ...m,
-      files: extractAttachedFiles(m.materials, sizeMap)
+      files: extractAttachedFiles(m.materials || [], sizeMap)
     };
     
     emit({ material: enrichedMat }, globals, (data) => {
@@ -718,8 +718,8 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
       const mat = data.material;
       const stateColor = mat.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(mat.state || 'UNKNOWN');
       const item: BlockItem = {
-        title: mat.title,
-        id: mat.id,
+        title: mat.title || 'Untitled Material',
+        id: mat.id || undefined,
         details: [
           ['State', stateColor],
           ...(mat.creationTime ? [['Created', mat.creationTime] as [string, string]] : []),
@@ -735,7 +735,7 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
         if (mat.scheduledTime) item.details!.push(['Scheduled', mat.scheduledTime]);
       }
       
-      const atts = formatAttachments(mat.materials, sizeMap);
+      const atts = formatAttachments(mat.materials || [], sizeMap);
       if (atts) item.attachments = atts;
       printBlock([item]);
     });

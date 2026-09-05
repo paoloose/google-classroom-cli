@@ -48,16 +48,18 @@ export async function uploadToDrive(filePath: string, globals: any, courseId?: s
       const classroom = await getClient();
       const course = (await classroom.courses.get({ id: courseId })).data;
       
-      // Google Classroom names the Drive folder after the course name and section
-      const folderName = course.section ? `${course.name} ${course.section}` : course.name;
+      const folderName = (course.section ? `${course.name} ${course.section}` : course.name) || '';
       
-      const search = await drive.files.list({
-        q: `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id)'
-      });
-      
-      if (search.data.files && search.data.files.length > 0) {
-        requestBody.parents = [search.data.files[0].id];
+      if (folderName) {
+        const search = await drive.files.list({
+          q: `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+          fields: 'files(id)'
+        });
+        
+        const firstFile = search.data.files?.[0];
+        if (firstFile?.id) {
+          requestBody.parents = [firstFile.id];
+        }
       }
     } catch (error) {
       // Ignore errors and fallback to root "My Drive"

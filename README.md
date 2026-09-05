@@ -185,7 +185,7 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom course get <id>` - Get details of a course
 - `classroom course create --name="<name>"` - Create a new course
 - `classroom course update <id> --status=<STATUS>` - Update course status (ACTIVE, ARCHIVED)
-- `classroom course enroll [id] <code>` - Join a course using an enrollment code or invite link
+- `classroom course enroll [id] <code> [--code-only]` - Join a course (use `--code-only` if you only have a 7-character code)
 - `classroom course unenroll [id]` - Leave a course (defaults to selected course)
 - `classroom roster list <id>` - List students in a course
 - `classroom roster add <id> --email="<email>"` - Add a student or teacher
@@ -211,8 +211,8 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom submit [course_id] [work_id] [--file="<path>"] [--link="<url>"]` - Upload to Google Drive and attach files/links (interactive TUI if task omitted, pass `--turn-in` to submit and turn in at once)
 - `classroom turn-in [course_id] [work_id]` - Hand in your submission (interactive TUI if task omitted)
 - `classroom unsubmit [course_id] [work_id]` - Retract your submission (interactive TUI if task omitted)
-- `classroom comment list [course_id] [work_id]` - List private comments on an assignment (via Web Engine)
-- `classroom comment post [course_id] [work_id] --text="<content>"` - Post a private comment to the teacher on an assignment (via Web Engine)
+- `classroom comment list [course_id] [work_id] [--class]` - List private comments on an assignment (or class comments with `--class`) via Web Engine
+- `classroom comment post [course_id] [work_id] --text="<content>" [--class]` - Post a private comment to the teacher (or class comment with `--class`) on an assignment via Web Engine
 - `classroom pending` - Global aggregator: get all your missing/active work across all active courses
 - `classroom due-soon` - View all assignments due in the next 7 days
 

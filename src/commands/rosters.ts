@@ -1,6 +1,6 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 

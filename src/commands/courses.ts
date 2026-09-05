@@ -1,11 +1,11 @@
 import { AppError } from '../../cli/foundation/error-map.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 
-import { printBlock, BlockItem } from '../ui.js';
+import { printBlock, type BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
 import { parseDueDate } from '../date-utils.js';
 import { getActiveCourse, setActiveCourse, clearActiveCourse, resolveCourseId } from '../context.js';
@@ -307,6 +307,7 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
     let courseId: string | undefined;
     let code: string | undefined;
 
+    const isCodeOnly = !!(argv['code-only'] || argv['codeOnly']);
     const arg1 = argv._[2];
     const arg2 = argv._[3];
 
@@ -338,11 +339,26 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
       courseId = argv['course'] || argv['courseId'];
     }
 
+    if (isCodeOnly || (!courseId && code)) {
+      if (!code) {
+        throw new AppError('MISSING_ARG', {
+          name: 'MissingArg',
+          human: 'Enrollment code is required for --code-only',
+          hint: 'classroom course enroll <code> --code-only'
+        });
+      }
+      const { ProfileManager } = await import('../../cli/foundation/profile.js');
+      const { executeWebEnroll } = await import('../web-engine.js');
+      const pm = new ProfileManager('classroom-cli');
+      const profile = pm.getActiveProfile() || pm.createProfile('default');
+      return await executeWebEnroll(profile, code, globals);
+    }
+
     if (!courseId || !code) {
       throw new AppError('MISSING_ARG', {
         name: 'MissingArg',
         human: 'Both Course ID and enrollment code are required',
-        hint: 'classroom course enroll <course_id> <code> or classroom course enroll <invite_link>'
+        hint: 'classroom course enroll <course_id> <code> or classroom course enroll <code> --code-only'
       });
     }
 

@@ -1,5 +1,5 @@
-import { Profile } from '../cli/foundation/profile.js';
-import { GlobalFlags } from '../cli/foundation/global-flags.js';
+import type { Profile } from '../cli/foundation/profile.js';
+import type { GlobalFlags } from '../cli/foundation/global-flags.js';
 import { note, emit } from '../cli/agent/json-mode.js';
 import { AppError } from '../cli/foundation/error-map.js';
 import { execSync, spawn } from 'node:child_process';
@@ -123,8 +123,9 @@ async function executeWebActionFlow(
     const modalClicked = await page.evaluate((modalStr) => {
       const regex = new RegExp(modalStr, 'i');
       const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (dialogs.length > 0) {
-        const modalBtns = Array.from(dialogs[0].querySelectorAll('button'));
+      const firstDialog = dialogs[0];
+      if (firstDialog) {
+        const modalBtns = Array.from(firstDialog.querySelectorAll('button'));
         const confirmBtn = modalBtns.find(b => regex.test(b.innerText?.trim() || ''));
         if (confirmBtn) {
           confirmBtn.click();
@@ -153,13 +154,134 @@ async function executeWebActionFlow(
   }
 }
 
+export async function executeWebEnroll(
+  profile: Profile,
+  code: string,
+  globals: GlobalFlags
+) {
+  note(`Enrolling into course via headless browser with code '${code}'...`, globals);
+
+  const browser = await launchWebEngine(profile);
+
+  try {
+    const page = await browser.newPage();
+    let enrolledCourseId: string | undefined;
+
+    // Track navigation or RPC to capture enrolled course ID
+    page.on('response', async (res) => {
+      const reqUrl = res.url();
+      if (reqUrl.includes('batchexecute') || reqUrl.includes('ClassroomUi')) {
+        try {
+          const text = await res.text();
+          // Match /c/<courseId> in response
+          const match = text.match(/\/c\/([a-zA-Z0-9_-]+)/);
+          if (match && !enrolledCourseId) {
+            const { decodeClassroomIdentifier } = await import('./url-utils.js');
+            enrolledCourseId = decodeClassroomIdentifier(match[1]);
+          }
+        } catch {}
+      }
+    });
+
+    note(`Navigating to Google Classroom home...`, globals);
+    await page.goto('https://classroom.google.com/u/0/h?hl=en', { waitUntil: 'networkidle2' });
+    await new Promise(r => setTimeout(r, 2000));
+
+    note(`Opening Join class modal...`, globals);
+    const joinModalOpened = await page.evaluate(async () => {
+      const allBtns = Array.from(document.querySelectorAll('button, a, div[role="button"]')) as HTMLElement[];
+      const joinBtn = allBtns.find(b => {
+        const aria = b.getAttribute('aria-label') || '';
+        return /create or join|join class|unirse a/i.test(aria);
+      });
+      if (joinBtn) {
+        joinBtn.click();
+        await new Promise(r => setTimeout(r, 1000));
+        const menuItems = Array.from(document.querySelectorAll('[role="menuitem"], li, button')) as HTMLElement[];
+        const joinOption = menuItems.find(i => /Join class|Unirse a una clase|Unirme a la clase/i.test(i.innerText || ''));
+        if (joinOption) {
+          joinOption.click();
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+      return !!document.querySelector('[role="dialog"], div[aria-modal="true"]');
+    });
+
+    if (!joinModalOpened) {
+      throw new Error('Could not open Join Class modal dialog.');
+    }
+
+    note(`Typing enrollment code '${code}'...`, globals);
+    await page.evaluate((c) => {
+      const dialog = document.querySelector('[role="dialog"], div[aria-modal="true"]');
+      const input = dialog?.querySelector('input');
+      if (input) {
+        input.value = c;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, code);
+
+    await page.keyboard.type(' ');
+    await page.keyboard.press('Backspace');
+    await new Promise(r => setTimeout(r, 1000));
+
+    note(`Submitting enrollment...`, globals);
+    const clickedJoin = await page.evaluate(async () => {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const dialog = document.querySelector('[role="dialog"], div[aria-modal="true"]');
+        if (dialog) {
+          const btns = Array.from(dialog.querySelectorAll('button')) as HTMLButtonElement[];
+          const joinBtn = btns.find(b => /Join|Unirme|Unirse/i.test(b.innerText?.trim() || '') && !b.disabled && !b.hasAttribute('disabled'));
+          if (joinBtn) {
+            joinBtn.click();
+            return true;
+          }
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+      return false;
+    });
+
+    if (!clickedJoin) {
+      throw new Error('Join button remained disabled or was not found in the dialog.');
+    }
+
+    // Wait for navigation to course page
+    note(`Waiting for enrollment confirmation...`, globals);
+    for (let i = 0; i < 20; i++) {
+      const currentUrl = page.url();
+      const courseMatch = currentUrl.match(/\/c\/([a-zA-Z0-9_-]+)/);
+      if (courseMatch) {
+        const { decodeClassroomIdentifier } = await import('./url-utils.js');
+        enrolledCourseId = decodeClassroomIdentifier(courseMatch[1]);
+        break;
+      }
+      if (enrolledCourseId) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    emit({ success: true, courseId: enrolledCourseId, code, webFallbackUsed: true }, globals, () => {
+      console.log(pc.green(`✔ Successfully enrolled into course ${enrolledCourseId || ''} using code '${code}' via Web Engine!`));
+    });
+  } catch (error: any) {
+    throw new AppError('WEB_AUTOMATION_FAILED', {
+      name: 'WebAutomationFailed',
+      human: 'Failed to enroll in course via web automation.',
+      hint: error.message
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function executeWebTurnIn(profile: Profile, courseId: string, workId: string, globals: GlobalFlags) {
   return await executeWebActionFlow(
     profile, courseId, workId, globals,
     'turn-in',
-    'Turn in|Mark as done',
-    'Unsubmit',
-    'Turn in|Mark as done'
+    'Turn in|Mark as done|Entregar|Marcar como completada',
+    'Unsubmit|Anular entrega',
+    'Turn in|Mark as done|Entregar|Marcar como completada'
   );
 }
 
@@ -167,9 +289,9 @@ export async function executeWebUnsubmit(profile: Profile, courseId: string, wor
   return await executeWebActionFlow(
     profile, courseId, workId, globals,
     'unsubmit',
-    'Unsubmit',
-    'Turn in|Mark as done',
-    'Unsubmit'
+    'Unsubmit|Anular entrega',
+    'Turn in|Mark as done|Entregar|Marcar como completada',
+    'Unsubmit|Anular entrega'
   );
 }
 
@@ -208,7 +330,7 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       const addMenuOpened = await page.evaluate(async () => {
         for (let i = 0; i < 20; i++) {
           const buttons = Array.from(document.querySelectorAll('button'));
-          const addBtn = buttons.find(b => /Add or create/i.test(b.innerText?.trim() || ''));
+          const addBtn = buttons.find(b => /Add or create|Añadir o crear/i.test(b.innerText?.trim() || ''));
           if (addBtn && !addBtn.disabled) {
             addBtn.click();
             return true;
@@ -220,11 +342,11 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       
       if (!addMenuOpened) throw new Error('Could not find "Add or create" button.');
       
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 800));
       
       const linkMenuItemClicked = await page.evaluate(() => {
-        const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
-        const linkItem = items.find(el => /Link/i.test((el as HTMLElement).innerText?.trim() || ''));
+        const items = Array.from(document.querySelectorAll('[role="menuitem"], li, button'));
+        const linkItem = items.find(el => /Link|Enlace/i.test((el as HTMLElement).innerText?.trim() || ''));
         if (linkItem) {
           (linkItem as HTMLElement).click();
           return true;
@@ -234,22 +356,24 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       
       if (!linkMenuItemClicked) throw new Error('Could not find "Link" option in the dropdown menu.');
       
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 1000));
       
       const typedAndAdded = await page.evaluate(async (urlText) => {
-        const dialogs = document.querySelectorAll('[role="dialog"]');
-        if (dialogs.length === 0) return false;
+        const dialogs = document.querySelectorAll('[role="dialog"], div[aria-modal="true"]');
+        const firstDialog = dialogs[0];
+        if (!firstDialog) return false;
         
-        const input = dialogs[0].querySelector('input');
+        const input = firstDialog.querySelector('input');
         if (!input) return false;
         
         input.value = urlText;
         input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
         
         await new Promise(r => setTimeout(r, 500));
         
-        const dialogBtns = Array.from(dialogs[0].querySelectorAll('button'));
-        const addLinkBtn = dialogBtns.find(b => /Add link/i.test(b.innerText?.trim() || ''));
+        const dialogBtns = Array.from(firstDialog.querySelectorAll('button'));
+        const addLinkBtn = dialogBtns.find(b => /Add link|Añadir enlace/i.test(b.innerText?.trim() || '') && !b.disabled);
         if (addLinkBtn) {
           addLinkBtn.click();
           return true;
@@ -260,7 +384,12 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       if (!typedAndAdded) throw new Error('Failed to paste link into the dialog.');
       
       note(`Waiting for Google Classroom to process the attachment...`, globals);
-      await new Promise(r => setTimeout(r, 5000));
+      // Fast poll until dialog disappears
+      for (let p = 0; p < 15; p++) {
+        const dialogOpen = await page.evaluate(() => !!document.querySelector('[role="dialog"] input'));
+        if (!dialogOpen) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
     
     emit({ success: true, webFallbackUsed: true, method: 'puppeteer' }, globals, () => console.log(pc.green(`\n✔ Successfully attached items via Web Engine.`)));
@@ -280,9 +409,10 @@ export async function executeWebPostPrivateComment(
   courseId: string,
   workId: string,
   text: string,
-  globals: GlobalFlags
+  globals: GlobalFlags,
+  isClassComment: boolean = false
 ) {
-  note(`Posting private comment via headless browser...`, globals);
+  note(`Posting ${isClassComment ? 'class' : 'private'} comment via headless browser...`, globals);
 
   const base64CourseId = Buffer.from(courseId).toString('base64');
   const base64WorkId = Buffer.from(workId).toString('base64');
@@ -295,35 +425,41 @@ export async function executeWebPostPrivateComment(
     note(`Navigating to assignment...`, globals);
     await page.goto(url, { waitUntil: 'networkidle2' });
 
-    note(`Locating private comments input...`, globals);
+    note(`Locating ${isClassComment ? 'class' : 'private'} comments input...`, globals);
     
-    const inputFound = await page.evaluate(async () => {
-      function getPrivateCommentsCard(): HTMLElement | null {
+    const inputFound = await page.evaluate(async (isClass) => {
+      function getCommentsCard(): HTMLElement | null {
         const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
         const candidates = all.filter(el => {
           const t = el.innerText || '';
-          const hasHeader = /private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t);
-          const hasNotYourWork = !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
-          return hasHeader && hasNotYourWork;
+          if (isClass) {
+            return /class comments?|\d+\s+class comments?|comentarios?\s+de\s+la\s+clase/i.test(t) && !/private comments|comentarios privados/i.test(t);
+          } else {
+            return (/private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t)) && !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+          }
         });
         candidates.sort((a, b) => b.innerText.length - a.innerText.length);
         return candidates[0] || null;
       }
 
       for (let attempt = 0; attempt < 20; attempt++) {
-        const card = getPrivateCommentsCard();
+        const card = getCommentsCard();
         const root = card || document.body;
 
         const inputs = Array.from(root.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]')) as HTMLElement[];
-        const privateInput = inputs.find(el => {
+        const targetInput = inputs.find(el => {
           const placeholder = el.getAttribute('placeholder') || '';
           const aria = el.getAttribute('aria-label') || '';
-          return /private comment|comentario privado|add comment to/i.test(placeholder) || /private comment|comentario privado|add comment to/i.test(aria);
+          if (isClass) {
+            return /class comment|comentario de la clase|add comment/i.test(placeholder) || /class comment|comentario de la clase|add comment/i.test(aria);
+          } else {
+            return /private comment|comentario privado|add comment to/i.test(placeholder) || /private comment|comentario privado|add comment to/i.test(aria);
+          }
         }) || (card ? inputs[0] : null);
 
-        if (privateInput) {
-          privateInput.focus();
-          privateInput.click();
+        if (targetInput) {
+          targetInput.focus();
+          targetInput.click();
           return true;
         }
 
@@ -331,7 +467,11 @@ export async function executeWebPostPrivateComment(
         const placeholderEl = clickablePlaceholders.find(el => {
           const t = el.innerText?.trim() || '';
           const a = el.getAttribute('aria-label') || '';
-          return (/Add private comment|Añadir un comentario privado|Add comment to/i.test(t) || /Add private comment|Añadir un comentario privado|Add comment to/i.test(a)) && !el.querySelector('textarea, input, [contenteditable="true"]');
+          if (isClass) {
+            return (/Add class comment|Añadir comentario de clase|Add comment/i.test(t) || /Add class comment|Añadir comentario de clase|Add comment/i.test(a)) && !el.querySelector('textarea, input, [contenteditable="true"]');
+          } else {
+            return (/Add private comment|Añadir un comentario privado|Add comment to/i.test(t) || /Add private comment|Añadir un comentario privado|Add comment to/i.test(a)) && !el.querySelector('textarea, input, [contenteditable="true"]');
+          }
         });
 
         if (placeholderEl) {
@@ -343,15 +483,15 @@ export async function executeWebPostPrivateComment(
         await new Promise(r => setTimeout(r, 500));
       }
       return false;
-    });
+    }, isClassComment);
 
     if (!inputFound) {
-      throw new Error('Could not find "Private comments" input box on the assignment page.');
+      throw new Error(`Could not find "${isClassComment ? 'Class comments' : 'Private comments'}" input box on the assignment page.`);
     }
 
     await new Promise(r => setTimeout(r, 800));
 
-    note(`Typing private comment...`, globals);
+    note(`Typing comment...`, globals);
     
     await page.evaluate((msg) => {
       const active = document.activeElement as HTMLElement;
@@ -371,12 +511,16 @@ export async function executeWebPostPrivateComment(
     await new Promise(r => setTimeout(r, 1000));
 
     note(`Looking for Post button...`, globals);
-    const posted = await page.evaluate(async () => {
+    const posted = await page.evaluate(async (isClass) => {
       for (let attempt = 0; attempt < 20; attempt++) {
         const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
         const candidates = all.filter(el => {
           const t = el.innerText || '';
-          return (/private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t)) && !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+          if (isClass) {
+            return /class comments?|\d+\s+class comments?|comentarios?\s+de\s+la\s+clase/i.test(t) && !/private comments|comentarios privados/i.test(t);
+          } else {
+            return (/private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t)) && !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+          }
         });
         candidates.sort((a, b) => b.innerText.length - a.innerText.length);
         const card = candidates[0] || document.body;
@@ -387,7 +531,7 @@ export async function executeWebPostPrivateComment(
           const title = b.getAttribute('data-tooltip') || '';
           const text = b.innerText?.trim() || '';
           const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true';
-          return (/Post/i.test(text) || /Post/i.test(aria) || /Post/i.test(title) || /Send/i.test(aria) || /Publicar/i.test(text)) && !isDisabled;
+          return (/Post|Send|Publicar/i.test(text) || /Post|Send|Publicar/i.test(aria) || /Post|Send|Publicar/i.test(title)) && !isDisabled;
         });
 
         if (postBtn) {
@@ -397,7 +541,7 @@ export async function executeWebPostPrivateComment(
         await new Promise(r => setTimeout(r, 500));
       }
       return false;
-    });
+    }, isClassComment);
 
     if (!posted) {
       await page.keyboard.press('Enter');
@@ -406,13 +550,13 @@ export async function executeWebPostPrivateComment(
     note(`Waiting for comment to be posted...`, globals);
     await new Promise(r => setTimeout(r, 3000));
 
-    emit({ success: true, courseId, workId, comment: text, webFallbackUsed: true }, globals, () => {
-      console.log(pc.green(`✔ Successfully posted private comment via Web Engine.`));
+    emit({ success: true, courseId, workId, comment: text, isClassComment, webFallbackUsed: true }, globals, () => {
+      console.log(pc.green(`✔ Successfully posted ${isClassComment ? 'class' : 'private'} comment via Web Engine.`));
     });
   } catch (error: any) {
     throw new AppError('WEB_AUTOMATION_FAILED', {
       name: 'WebAutomationFailed',
-      human: 'Failed to post private comment via web automation.',
+      human: `Failed to post ${isClassComment ? 'class' : 'private'} comment via web automation.`,
       hint: error.message
     });
   } finally {
@@ -424,9 +568,10 @@ export async function executeWebListPrivateComments(
   profile: Profile,
   courseId: string,
   workId: string,
-  globals: GlobalFlags
+  globals: GlobalFlags,
+  isClassComment: boolean = false
 ) {
-  note(`Fetching private comments via headless browser...`, globals);
+  note(`Fetching ${isClassComment ? 'class' : 'private'} comments via headless browser...`, globals);
 
   const base64CourseId = Buffer.from(courseId).toString('base64');
   const base64WorkId = Buffer.from(workId).toString('base64');
@@ -436,7 +581,7 @@ export async function executeWebListPrivateComments(
 
   try {
     const page = await browser.newPage();
-    const capturedRpcComments: { id?: string; createTime?: string; updateTime?: string; text: string }[] = [];
+    const capturedRpcComments: { id?: string | undefined; createTime?: string | undefined; updateTime?: string | undefined; text: string }[] = [];
 
     // Intercept Google Classroom internal RPCs for millisecond-precision timestamps (Zero hardcoded RPC IDs)
     function extractCommentsFromRpcPayload(obj: any) {
@@ -504,14 +649,16 @@ export async function executeWebListPrivateComments(
 
     await new Promise(r => setTimeout(r, 2500));
 
-    const domExtracted = await page.evaluate(() => {
-      // 1. Locate the private comments card semantically (zero hardcoded minified classes)
+    const domExtracted = await page.evaluate((isClass) => {
+      // 1. Locate the target comments card semantically
       const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
       const candidates = all.filter(el => {
         const t = el.innerText || '';
-        const hasHeader = /private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t);
-        const hasNotYourWork = !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
-        return hasHeader && hasNotYourWork;
+        if (isClass) {
+          return /class comments?|\d+\s+class comments?|comentarios?\s+de\s+la\s+clase/i.test(t) && !/private comments|comentarios privados/i.test(t);
+        } else {
+          return (/private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t)) && !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+        }
       });
 
       candidates.sort((a, b) => b.innerText.length - a.innerText.length);
@@ -525,7 +672,7 @@ export async function executeWebListPrivateComments(
         return (t.includes(' • ') || t.includes(' · ')) && el.children.length <= 2 && t.length < 80;
       });
 
-      const parsed: { author?: string; time?: string; text: string }[] = [];
+      const parsed: { author?: string | undefined; time?: string | undefined; text: string }[] = [];
 
       for (const aNode of authorNodes) {
         const aText = aNode.textContent?.trim() || '';
@@ -538,7 +685,7 @@ export async function executeWebListPrivateComments(
         let curr: HTMLElement | null = aNode.parentElement;
         for (let depth = 0; depth < 5 && curr && curr !== card; depth++) {
           const next = curr.nextElementSibling as HTMLElement;
-          if (next && next.innerText && !/add private comment|post|private comments are only visible/i.test(next.innerText)) {
+          if (next && next.innerText && !/add private comment|add class comment|post|private comments are only visible/i.test(next.innerText)) {
             bodyText = next.innerText.trim();
             break;
           }
@@ -551,7 +698,7 @@ export async function executeWebListPrivateComments(
       }
 
       return parsed;
-    });
+    }, isClassComment);
 
     // Merge RPC detailed metadata with DOM extracted author names
     const comments = (domExtracted.length > 0 ? domExtracted : capturedRpcComments).map((c: any) => {
@@ -577,12 +724,13 @@ export async function executeWebListPrivateComments(
       };
     });
 
-    emit({ courseId, workId, comments, count: comments.length, webFallbackUsed: true }, globals, (data) => {
+    emit({ courseId, workId, comments, isClassComment, count: comments.length, webFallbackUsed: true }, globals, (data) => {
+      const label = isClassComment ? 'Class Comments' : 'Private Comments';
       if (data.comments.length === 0) {
-        console.log(pc.yellow('No private comments found on this assignment.'));
+        console.log(pc.yellow(`No ${label.toLowerCase()} found on this assignment.`));
         return;
       }
-      console.log(pc.bold(pc.cyan(`\n💬 Private Comments (${data.comments.length}):`)));
+      console.log(pc.bold(pc.cyan(`\n💬 ${label} (${data.comments.length}):`)));
       for (const c of data.comments) {
         console.log(`\n  ${pc.bold(c.author || 'User')} ${c.time ? pc.dim(`(${c.time})`) : ''}`);
         console.log(`  ${c.text}`);
@@ -592,11 +740,10 @@ export async function executeWebListPrivateComments(
   } catch (error: any) {
     throw new AppError('WEB_AUTOMATION_FAILED', {
       name: 'WebAutomationFailed',
-      human: 'Failed to list private comments via web automation.',
+      human: `Failed to list ${isClassComment ? 'class' : 'private'} comments via web automation.`,
       hint: error.message
     });
   } finally {
     await browser.close();
   }
 }
-

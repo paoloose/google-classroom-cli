@@ -1,6 +1,6 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
@@ -49,12 +49,14 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
 
     const classroom = await getClient();
 
+    const isClassComment = Boolean(argv['class']);
+
     if (!courseWorkId) {
       if (globals.json) {
         throw new AppError('MISSING_ARG', {
           name: 'MissingArg',
           human: 'CourseWork ID is required in JSON mode',
-          hint: 'classroom comment list <course_id> <work_id>'
+          hint: `classroom comment list <course_id> <work_id>${isClassComment ? ' --class' : ''}`
         });
       }
 
@@ -73,7 +75,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
           hint: `ID: ${c.id}`
         }));
         const chosenCourseId = await select({
-          message: 'Select a course:',
+          message: `Select a course to view ${isClassComment ? 'class' : 'private'} comments:`,
           options: courseOptions
         });
         if (isCancel(chosenCourseId)) {
@@ -110,7 +112,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
       });
 
       const chosenTaskId = await select({
-        message: 'Select an assignment to view private comments:',
+        message: `Select an assignment to view ${isClassComment ? 'class' : 'private'} comments:`,
         options: taskOptions
       });
 
@@ -137,7 +139,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     }
 
     const { executeWebListPrivateComments } = await import('../web-engine.js');
-    await executeWebListPrivateComments(activeProfile, courseId, courseWorkId, globals);
+    await executeWebListPrivateComments(activeProfile, courseId, courseWorkId, globals, isClassComment);
   } else if (verb === 'post' || verb === 'add' || verb === 'create') {
     let courseId: string | undefined;
     let courseWorkId: string | undefined;
@@ -179,12 +181,14 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
 
     const classroom = await getClient();
 
+    const isClassComment = Boolean(argv['class']);
+
     if (!courseWorkId) {
       if (globals.json) {
         throw new AppError('MISSING_ARG', {
           name: 'MissingArg',
           human: 'CourseWork ID is required in JSON mode',
-          hint: 'classroom comment post <course_id> <work_id> --text="<content>"'
+          hint: `classroom comment post <course_id> <work_id> --text="<content>"${isClassComment ? ' --class' : ''}`
         });
       }
 
@@ -203,7 +207,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
           hint: `ID: ${c.id}`
         }));
         const chosenCourseId = await select({
-          message: 'Select a course for private comment:',
+          message: `Select a course for ${isClassComment ? 'class' : 'private'} comment:`,
           options: courseOptions
         });
         if (isCancel(chosenCourseId)) {
@@ -240,7 +244,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
       });
 
       const chosenTaskId = await select({
-        message: 'Select an assignment to post private comment:',
+        message: `Select an assignment to post ${isClassComment ? 'class' : 'private'} comment:`,
         options: taskOptions
       });
 
@@ -261,14 +265,14 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
         throw new AppError('MISSING_ARG', {
           name: 'MissingArg',
           human: 'Comment text is required',
-          hint: 'classroom comment post <course_id> <work_id> --text="<your message>"'
+          hint: `classroom comment post <course_id> <work_id> --text="<your message>"${isClassComment ? ' --class' : ''}`
         });
       }
 
       const { text: textPrompt, isCancel, cancel } = await import('@clack/prompts');
       const entered = await textPrompt({
-        message: 'Enter your private comment:',
-        placeholder: 'Type your message to the teacher...',
+        message: `Enter your ${isClassComment ? 'class' : 'private'} comment:`,
+        placeholder: isClassComment ? 'Type your message to the class...' : 'Type your message to the teacher...',
         validate(val) {
           if (!val || !val.trim()) return 'Comment cannot be empty';
         }
@@ -293,7 +297,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     }
 
     const { executeWebPostPrivateComment } = await import('../web-engine.js');
-    await executeWebPostPrivateComment(activeProfile, courseId, courseWorkId, commentText, globals);
+    await executeWebPostPrivateComment(activeProfile, courseId, courseWorkId, commentText, globals, isClassComment);
   } else {
     throw new AppError('UNKNOWN_COMMAND', {
       name: 'UnknownCommand',

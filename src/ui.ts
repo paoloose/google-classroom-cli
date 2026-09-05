@@ -2,9 +2,9 @@ import pc from 'picocolors';
 
 export interface BlockItem {
   title: string;
-  id?: string;
-  details?: [string, string][];
-  attachments?: string[];
+  id?: string | undefined;
+  details?: [string, string][] | undefined;
+  attachments?: string[] | undefined;
 }
 
 export function printBlock(items: BlockItem[]) {

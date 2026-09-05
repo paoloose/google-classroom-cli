@@ -18,7 +18,7 @@
 export type ErrorEntry = {
   name: string;
   human: string;
-  hint?: string;
+  hint?: string | undefined;
 };
 
 export type ErrorMap = Record<string, ErrorEntry>;
@@ -26,7 +26,7 @@ export type ErrorMap = Record<string, ErrorEntry>;
 export class AppError extends Error {
   code: string;
   human: string;
-  hint?: string;
+  hint?: string | undefined;
 
   constructor(code: string, entry: ErrorEntry, cause?: unknown) {
     super(entry.human);

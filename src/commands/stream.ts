@@ -1,10 +1,10 @@
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { resolveDateRange, applyDateFilter } from '../../cli/foundation/date-filter.js';
 import { getClient } from '../client.js';
 import pc from 'picocolors';
-import { printBlock, BlockItem } from '../ui.js';
+import { printBlock, type BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { resolveCourseId } from '../context.js';
 import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
@@ -77,20 +77,26 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
     const enrichedAnnouncement = {
       ...a,
-      files: extractAttachedFiles(a.materials, sizeMap)
+      files: extractAttachedFiles(a.materials || [], sizeMap)
     };
     
     emit({ announcement: enrichedAnnouncement }, globals, (data) => {
       console.log(pc.green(`\n✔ Announcement Details:`));
+      const detailsList: [string, string][] = [
+        ['State', a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN')],
+        ['Posted', a.updateTime || a.creationTime || '']
+      ];
+      if (a.creationTime && a.updateTime && a.creationTime !== a.updateTime) {
+        detailsList.push(['Created', a.creationTime]);
+      }
+      if (a.alternateLink) {
+        detailsList.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+      }
+      
       const item: BlockItem = {
-        title: a.text,
-        id: a.id,
-        details: [
-          ['State', a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN')],
-          ['Posted', a.updateTime || a.creationTime],
-          ...(a.creationTime && a.updateTime && a.creationTime !== a.updateTime ? [['Created', a.creationTime] as [string, string]] : []),
-          ...(a.alternateLink ? [['Link', pc.blue(pc.underline(a.alternateLink))] as [string, string]] : [])
-        ]
+        title: a.text || 'Untitled Announcement',
+        id: a.id || undefined,
+        details: detailsList
       };
       if (isFull) {
         if (a.courseId) item.details!.push(['Course ID', a.courseId]);
@@ -99,7 +105,7 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
         if (a.assigneeMode) item.details!.push(['Assignee Mode', a.assigneeMode]);
       }
       
-      const atts = formatAttachments(a.materials, sizeMap);
+      const atts = formatAttachments(a.materials || [], sizeMap);
       if (atts && atts.length > 0) item.attachments = atts;
       
       printBlock([item]);

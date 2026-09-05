@@ -23,7 +23,7 @@ async function main() {
     'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
     'text', 't', 'message', 'm', 'content', 'title', 'link', 'file', 'dest', 'score', 'topic',
-    'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn'
+    'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn', 'code-only', 'codeOnly', 'class'
   ]);
   for (const key of Object.keys(argv)) {
     if (key !== '_' && !allowedFlags.has(key)) {
@@ -80,7 +80,7 @@ async function main() {
         ['course deselect', 'Clear active course context'],
         ['course current', 'Show currently selected course'],
         ['course get [id]', 'Get details of a course (defaults to selected course)'],
-        ['course enroll [id] <code>', 'Join a course with enrollment code or invite link'],
+        ['course enroll [id] <code>', 'Join a course with enrollment code or invite link (use --code-only with 7-char code)'],
         ['course unenroll [id]', 'Leave a course (defaults to selected course)'],
         ['course create', 'Create a course (requires --name)'],
         ['course update [id]', 'Update a course status (requires --status)'],
@@ -112,13 +112,13 @@ async function main() {
       ]);
       
       printCategory('Student Actions', [
-        ['enroll [id] <code>', 'Join a course with enrollment code or invite link'],
+        ['enroll [id] <code>', 'Join a course (use --code-only if you only have a 7-character code)'],
         ['unenroll [id]', 'Leave a course (defaults to selected course)'],
         ['submit [c_id] [w_id]', 'Attach a link/file (interactive TUI if no task, --turn-in for full submission)'],
         ['turn-in [c_id] [w_id]', 'Turn in assignment (interactive TUI if no task)'],
         ['unsubmit [c_id] [w_id]', 'Unsubmit assignment (interactive TUI if no task)'],
-        ['comment list [c_id] [w_id]', 'List private comments on an assignment'],
-        ['comment post [c_id] [w_id]', 'Post a private comment (supports --text, interactive prompt if omitted)'],
+        ['comment list [c_id] [w_id]', 'List private/class comments on an assignment (use --class for class comments)'],
+        ['comment post [c_id] [w_id]', 'Post a private/class comment (supports --text, --class)'],
         ['pending', 'Global list of pending tasks across all courses'],
         ['due-soon', 'Global list of tasks due in the next 7 days']
       ]);
@@ -160,7 +160,7 @@ async function main() {
     
     if (noun === 'drive' && verb === 'download') {
       const fileId = argv._[2];
-      const destArg = argv._[3] || argv['dest'];
+      const destArg = (argv._[3] || argv['dest']) as string | undefined;
       if (!fileId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'File ID is required', hint: 'classroom drive download <id> [dest]' });
       const { downloadFromDrive } = await import('./commands/drive.js');
       note(`Downloading file ${fileId}...`, globals);
@@ -177,7 +177,7 @@ async function main() {
     if (noun === 'course' && verb === 'work') return await handleCourseWork(globals, { ...argv, _: ['course', 'work', argv._[2]] });
 
     throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown command: ${noun || ''} ${verb || ''}`.trim() });
-  } catch (error) {
+  } catch (error: any) {
     reportError(error, globals);
     process.exit(1);
   }

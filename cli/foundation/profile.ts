@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync } from "node:fs";
 import { atomicWriteJson } from "./atomic-write.js";
-import { getAppPaths, AppPaths } from "./xdg-paths.js";
+import { getAppPaths, type AppPaths } from "./xdg-paths.js";
 
 export type Profile = {
   name: string;

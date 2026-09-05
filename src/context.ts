@@ -7,7 +7,7 @@ import { parseClassroomUrl, decodeClassroomIdentifier } from './url-utils.js';
 export interface ActiveCourse {
   id: string;
   name: string;
-  section?: string;
+  section?: string | undefined;
   selectedAt: string;
 }
 
@@ -28,7 +28,7 @@ export function getActiveCourse(): ActiveCourse | null {
   }
 }
 
-export function setActiveCourse(course: { id: string; name: string; section?: string }): ActiveCourse {
+export function setActiveCourse(course: { id: string; name: string; section?: string | undefined }): ActiveCourse {
   ensureHome(paths);
   const active: ActiveCourse = {
     id: course.id,

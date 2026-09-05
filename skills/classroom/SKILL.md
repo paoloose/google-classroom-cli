@@ -33,8 +33,8 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
   - Create a course.
 - `classroom course update [id] --status=<ACTIVE|ARCHIVED|DECLINED|PROVISIONED>`
   - Update a course's status.
-- `classroom course enroll [id] <code>`
-  - Join a course with an enrollment code or invite link.
+- `classroom course enroll [id] <code> [--code-only]`
+  - Join a course with an enrollment code or invite link. If you only have a 7-character code (and no course ID), use `--code-only` to join via the Web Engine automatically.
 - `classroom course unenroll [id]`
   - Leave a course (defaults to selected course).
 - `classroom roster list [course_id] [--role=teacher]`
@@ -87,10 +87,10 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
   - Hand in your submission (interactive TUI if `work_id` is omitted).
 - `classroom unsubmit [course_id] [work_id]`
   - Reclaim (unsubmit) your submission (interactive TUI if `work_id` is omitted).
-- `classroom comment list [course_id] [work_id]`
-  - List private comments on an assignment via Web Engine (interactive TUI if `work_id` is omitted).
-- `classroom comment post [course_id] [work_id] --text="<content>"`
-  - Post a private comment to the teacher on an assignment via Web Engine (interactive TUI if `work_id` or `--text` is omitted).
+- `classroom comment list [course_id] [work_id] [--class]`
+  - List comments on an assignment via Web Engine (defaults to private comments; pass `--class` to list class comments).
+- `classroom comment post [course_id] [work_id] --text="<content>" [--class]`
+  - Post a comment on an assignment via Web Engine (defaults to private comment to the teacher; pass `--class` to post a class comment).
 - `classroom tasks pending`
   - Aggregator: every pending submission across all active courses. Default view shows Course + Due state.
 - `classroom tasks due-soon`

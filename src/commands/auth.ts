@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { URL } from 'node:url';
 import { AppError } from '../../cli/foundation/error-map.js';
 import { emit, note } from '../../cli/agent/json-mode.js';
-import { GlobalFlags } from '../../cli/foundation/global-flags.js';
+import type { GlobalFlags } from '../../cli/foundation/global-flags.js';
 import { saveSession, clearSession } from '../../cli/foundation/session.js';
 import { promptSecret } from '../../cli/agent/prompt-secret.js';
 import { detectMode } from '../../cli/platform/detect.js';

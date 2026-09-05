@@ -1,12 +1,12 @@
 export interface ParsedClassroomReference {
-  courseId?: string;
-  courseWorkId?: string;
-  materialId?: string;
-  announcementId?: string;
-  topicId?: string;
-  resourceId?: string;
-  resourceType?: 'course' | 'work' | 'material' | 'announcement' | 'topic';
-  code?: string;
+  courseId?: string | undefined;
+  courseWorkId?: string | undefined;
+  materialId?: string | undefined;
+  announcementId?: string | undefined;
+  topicId?: string | undefined;
+  resourceId?: string | undefined;
+  resourceType?: 'course' | 'work' | 'material' | 'announcement' | 'topic' | undefined;
+  code?: string | undefined;
 }
 
 export function decodeClassroomIdentifier(raw?: string): string | undefined {
@@ -105,7 +105,7 @@ export function resolveResourceIds(
   arg1?: string,
   arg2?: string,
   preferredType?: 'work' | 'material' | 'announcement' | 'topic'
-): { courseId?: string; resourceId?: string; code?: string } {
+): { courseId?: string | undefined; resourceId?: string | undefined; code?: string | undefined } {
   if (arg1 && arg2) {
     const p1 = parseClassroomUrl(arg1);
     const p2 = parseClassroomUrl(arg2);
