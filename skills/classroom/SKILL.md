@@ -33,6 +33,10 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
   - Create a course.
 - `classroom course update [id] --status=<ACTIVE|ARCHIVED|DECLINED|PROVISIONED>`
   - Update a course's status.
+- `classroom course enroll [id] <code>`
+  - Join a course with an enrollment code or invite link.
+- `classroom course unenroll [id]`
+  - Leave a course (defaults to selected course).
 - `classroom roster list [course_id] [--role=teacher]`
   - List students (or `--role=teacher` for teachers) in a course.
 - `classroom roster add [course_id] --email="<email>" [--role=teacher]`
@@ -77,12 +81,16 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
   - Return a graded submission to the student.
 
 ### Student Actions
-- `classroom submit [course_id] <work_id> --link="<url>" | --file="<local_path>"`
-  - Attach a link or uploaded file to your pending submission. Multiple flags allowed.
-- `classroom turn-in [course_id] <work_id>`
-  - Hand in your submission.
-- `classroom unsubmit [course_id] <work_id>`
-  - Reclaim (unsubmit) your submission.
+- `classroom submit [course_id] [work_id] [--link="<url>"...] [--file="<local_path>"...] [--turn-in]`
+  - Attach a link or uploaded file to your pending submission. If `work_id` is omitted, opens an interactive TUI to select the assignment. Pass `--turn-in` to submit and turn in simultaneously.
+- `classroom turn-in [course_id] [work_id]`
+  - Hand in your submission (interactive TUI if `work_id` is omitted).
+- `classroom unsubmit [course_id] [work_id]`
+  - Reclaim (unsubmit) your submission (interactive TUI if `work_id` is omitted).
+- `classroom comment list [course_id] [work_id]`
+  - List private comments on an assignment via Web Engine (interactive TUI if `work_id` is omitted).
+- `classroom comment post [course_id] [work_id] --text="<content>"`
+  - Post a private comment to the teacher on an assignment via Web Engine (interactive TUI if `work_id` or `--text` is omitted).
 - `classroom tasks pending`
   - Aggregator: every pending submission across all active courses. Default view shows Course + Due state.
 - `classroom tasks due-soon`
@@ -208,4 +216,5 @@ NDJSON (one object per line) for arrays, single object otherwise. Errors:
 1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`)** — Google Classroom blocks API clients from modifying submissions (attaching files, turning in) when the assignment was created manually by a teacher in the Web UI or by a different Google Cloud project. The CLI can only submit/turn-in assignments that the CLI itself created. Agents should fall back to the Web UI (or instruct the user) for manual assignment submissions.
 2. **Google Drive API Requirement** — All file attachments live in Google Drive. `--file` uploads and `drive download` need the "Google Drive API" enabled in the user's Google Cloud project, otherwise they 403.
 3. **Course Creation States (`@CourseStateDenied`)** — Courses created via the CLI may default to `PROVISIONED` depending on Workspace domain policy. The API rejects direct `PROVISIONED → ARCHIVED` transitions; the course must be activated in the Web UI first.
-4. **Schedule time on stream** — `stream post` accepts an optional `--scheduled` parameter; the value is passed through unchanged, so format it per the Google Classroom API expectation.
+4. **Course Enrollment Requires Course ID (`enroll [id] <code>`)** — In the Classroom Web UI, students join classes by typing only a 7-character code because Google performs a global lookup. In the REST API, the endpoint is course-scoped (`courses.students.create`) and requires both `courseId` and `enrollmentCode`. Pass the full invite link (`https://classroom.google.com/c/...`) to let the CLI extract both automatically, or join via the Web UI if only given the 7-character code.
+5. **Schedule time on stream** — `stream post` accepts an optional `--scheduled` parameter; the value is passed through unchanged, so format it per the Google Classroom API expectation.

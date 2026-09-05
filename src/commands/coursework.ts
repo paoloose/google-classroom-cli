@@ -7,7 +7,7 @@ import pc from 'picocolors';
 import { printBlock, BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments, extractAttachedFiles } from '../attachments.js';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
-import { resolveCourseId } from '../context.js';
+import { resolveCourseId, getActiveCourse } from '../context.js';
 
 async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
@@ -867,17 +867,122 @@ export async function handleSubmissions(verb: string | undefined, globals: Globa
 }
 
 export async function handleStudentAction(verb: string | undefined, globals: GlobalFlags, argv: any) {
-  let courseId: string;
-  let courseWorkId: string;
+  const classroom = await getClient();
+  let courseId: string | undefined;
+  let courseWorkId: string | undefined;
+
   if (argv._[3]) {
     courseId = argv._[2];
     courseWorkId = argv._[3];
+  } else if (argv._[2]) {
+    const active = getActiveCourse();
+    if (active?.id) {
+      courseId = active.id;
+      courseWorkId = argv._[2];
+    } else {
+      try {
+        await classroom.courses.get({ id: argv._[2] });
+        courseId = argv._[2];
+        courseWorkId = undefined;
+      } catch {
+        courseWorkId = argv._[2];
+      }
+    }
   } else {
-    courseId = resolveCourseId(undefined);
-    courseWorkId = argv._[2];
+    const active = getActiveCourse();
+    if (active?.id) {
+      courseId = active.id;
+    }
   }
-  if (!courseWorkId) throw new AppError('MISSING_ARG', { name: 'MissingArg', human: 'CourseWork ID is required' });
-  const classroom = await getClient();
+
+  if (!courseWorkId) {
+    if (globals.json) {
+      throw new AppError('MISSING_ARG', {
+        name: 'MissingArg',
+        human: 'CourseWork ID is required in JSON mode',
+        hint: `classroom ${verb || 'submit'} <course_id> <work_id> or select an active course and run classroom ${verb || 'submit'} <work_id>`
+      });
+    }
+
+    if (!courseId) {
+      note('Fetching active courses...', globals);
+      const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
+      const courses = coursesRes.data.courses || [];
+      if (courses.length === 0) {
+        console.log(pc.yellow('No active courses found to select.'));
+        return;
+      }
+      const { select, isCancel, cancel } = await import('@clack/prompts');
+      const courseOptions = courses.map((c: any) => ({
+        value: c.id!,
+        label: `${c.name}${c.section ? ` · ${c.section}` : ''}`,
+        hint: `ID: ${c.id}`
+      }));
+      const chosenCourseId = await select({
+        message: 'Select a course for submission:',
+        options: courseOptions
+      });
+      if (isCancel(chosenCourseId)) {
+        cancel('Action cancelled.');
+        return;
+      }
+      courseId = chosenCourseId as string;
+    }
+
+    note(`Fetching assignments for course ${courseId}...`, globals);
+    const cwListRes = await classroom.courses.courseWork.list({
+      courseId,
+      courseWorkStates: ['PUBLISHED']
+    });
+    const works = cwListRes.data.courseWork || [];
+    if (works.length === 0) {
+      console.log(pc.yellow('No published assignments found in this course.'));
+      return;
+    }
+
+    const { select, isCancel, cancel } = await import('@clack/prompts');
+    const taskOptions = works.map((w: any) => {
+      let hint = `ID: ${w.id}`;
+      if (w.dueDate) {
+        const tDate = parseDueDate(w);
+        const timeLeft = formatTimeLeft(tDate, new Date());
+        hint += ` · Due: ${timeLeft}`;
+      }
+      return {
+        value: w.id!,
+        label: w.title || 'Untitled Assignment',
+        hint
+      };
+    });
+
+    const chosenTaskId = await select({
+      message: `Select an assignment to ${verb || 'submit'}:`,
+      options: taskOptions
+    });
+
+    if (isCancel(chosenTaskId)) {
+      cancel('Action cancelled.');
+      return;
+    }
+    courseWorkId = chosenTaskId as string;
+  }
+
+  if (verb === 'submit' && argv['turn-in'] === undefined && argv['turnIn'] === undefined && !globals.json) {
+    const { confirm, isCancel, cancel } = await import('@clack/prompts');
+    const shouldTurnIn = await confirm({
+      message: 'Do you want to turn in the assignment now?',
+      initialValue: true
+    });
+    if (isCancel(shouldTurnIn)) {
+      cancel('Action cancelled.');
+      return;
+    }
+    argv['turn-in'] = shouldTurnIn;
+  }
+
+  if (!courseId) {
+    throw new AppError('MISSING_ARG', { name: 'MissingCourseId', human: 'Course ID is required.' });
+  }
 
   // Smart Routing Engine check
   const cwRes = await classroom.courses.courseWork.get({ courseId, id: courseWorkId });
@@ -913,7 +1018,7 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
       } else {
         console.log(pc.cyan(`\n💡 Hint: Attachments were added but not turned in.`));
         console.log(pc.cyan(`   Next time, pass the --turn-in flag to do it all at once.`));
-        console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`bun src/cli.ts turn-in ${courseId} ${courseWorkId}`));
+        console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`classroom turn-in ${courseId} ${courseWorkId}`));
       }
       return;
     } else if (verb === 'unsubmit') {
@@ -974,7 +1079,7 @@ export async function handleStudentAction(verb: string | undefined, globals: Glo
           console.log(pc.green(`✔ Attachments added successfully.`));
           console.log(pc.cyan(`\n💡 Hint: Attachments were added but not turned in.`));
           console.log(pc.cyan(`   Next time, pass the --turn-in flag to do it all at once.`));
-          console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`bun src/cli.ts turn-in ${courseId} ${courseWorkId}`));
+          console.log(pc.cyan(`   To turn this assignment in now, run: `) + pc.bold(`classroom turn-in ${courseId} ${courseWorkId}`));
         });
       }
       return;

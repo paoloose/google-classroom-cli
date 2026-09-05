@@ -274,3 +274,216 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
     await browser.close();
   }
 }
+
+export async function executeWebPostPrivateComment(
+  profile: Profile,
+  courseId: string,
+  workId: string,
+  text: string,
+  globals: GlobalFlags
+) {
+  note(`Posting private comment via headless browser...`, globals);
+
+  const base64CourseId = Buffer.from(courseId).toString('base64');
+  const base64WorkId = Buffer.from(workId).toString('base64');
+  const url = `https://classroom.google.com/c/${base64CourseId}/a/${base64WorkId}/details?hl=en`;
+
+  const browser = await launchWebEngine(profile);
+
+  try {
+    const page = await browser.newPage();
+    note(`Navigating to assignment...`, globals);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    note(`Locating private comments input...`, globals);
+    
+    const inputFound = await page.evaluate(async () => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span, section'));
+        const privateHeading = headings.find(el => /private comments/i.test(el.innerText?.trim() || ''));
+        
+        let container: HTMLElement | null = privateHeading ? (privateHeading.closest('section, div[role="region"], div') as HTMLElement) : null;
+        if (!container) container = document.body;
+
+        const inputs = Array.from(document.querySelectorAll('textarea, input, [contenteditable="true"]')) as HTMLElement[];
+        const privateInput = inputs.find(el => {
+          const placeholder = el.getAttribute('placeholder') || '';
+          const aria = el.getAttribute('aria-label') || '';
+          return /private comment/i.test(placeholder) || /private comment/i.test(aria) || /comentario privado/i.test(placeholder);
+        }) || inputs.find(el => {
+          return el.closest('div, section')?.innerText?.includes('Private comments');
+        });
+
+        if (privateInput) {
+          privateInput.focus();
+          privateInput.click();
+          return true;
+        }
+
+        const clickablePlaceholders = Array.from(document.querySelectorAll('div, span, button')) as HTMLElement[];
+        const placeholderEl = clickablePlaceholders.find(el => {
+          const t = el.innerText?.trim() || '';
+          const a = el.getAttribute('aria-label') || '';
+          return (t === 'Add private comment...' || t === 'Add private comment' || /Add private comment/i.test(a)) && !el.querySelector('textarea, input');
+        });
+
+        if (placeholderEl) {
+          placeholderEl.click();
+          placeholderEl.focus();
+          return true;
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+      }
+      return false;
+    });
+
+    if (!inputFound) {
+      throw new Error('Could not find "Private comments" input box on the assignment page.');
+    }
+
+    await new Promise(r => setTimeout(r, 800));
+
+    note(`Typing private comment...`, globals);
+    
+    await page.evaluate((msg) => {
+      const active = document.activeElement as HTMLElement;
+      if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
+        (active as HTMLInputElement).value = msg;
+        active.dispatchEvent(new Event('input', { bubbles: true }));
+        active.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (active && active.getAttribute('contenteditable') === 'true') {
+        active.innerText = msg;
+        active.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, text);
+
+    await page.keyboard.type(' ');
+    await page.keyboard.press('Backspace');
+
+    await new Promise(r => setTimeout(r, 1000));
+
+    note(`Looking for Post button...`, globals);
+    const posted = await page.evaluate(async () => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const buttons = Array.from(document.querySelectorAll('button')) as HTMLButtonElement[];
+        const postBtn = buttons.find(b => {
+          const aria = b.getAttribute('aria-label') || '';
+          const title = b.getAttribute('data-tooltip') || '';
+          const text = b.innerText?.trim() || '';
+          return (/Post/i.test(text) || /Post/i.test(aria) || /Post/i.test(title) || /Send/i.test(aria) || /Publicar/i.test(text)) && !b.disabled;
+        });
+
+        if (postBtn && !postBtn.disabled) {
+          postBtn.click();
+          return true;
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+      return false;
+    });
+
+    if (!posted) {
+      await page.keyboard.press('Enter');
+    }
+
+    note(`Waiting for comment to be posted...`, globals);
+    await new Promise(r => setTimeout(r, 3000));
+
+    emit({ success: true, courseId, workId, comment: text, webFallbackUsed: true }, globals, () => {
+      console.log(pc.green(`✔ Successfully posted private comment via Web Engine.`));
+    });
+  } catch (error: any) {
+    throw new AppError('WEB_AUTOMATION_FAILED', {
+      name: 'WebAutomationFailed',
+      human: 'Failed to post private comment via web automation.',
+      hint: error.message
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
+export async function executeWebListPrivateComments(
+  profile: Profile,
+  courseId: string,
+  workId: string,
+  globals: GlobalFlags
+) {
+  note(`Fetching private comments via headless browser...`, globals);
+
+  const base64CourseId = Buffer.from(courseId).toString('base64');
+  const base64WorkId = Buffer.from(workId).toString('base64');
+  const url = `https://classroom.google.com/c/${base64CourseId}/a/${base64WorkId}/details?hl=en`;
+
+  const browser = await launchWebEngine(profile);
+
+  try {
+    const page = await browser.newPage();
+    note(`Navigating to assignment...`, globals);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    await new Promise(r => setTimeout(r, 2500));
+
+    const comments = await page.evaluate(() => {
+      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span, section'));
+      const privateHeading = headings.find(el => /private comments/i.test(el.innerText?.trim() || ''));
+      
+      let container: HTMLElement | null = null;
+      if (privateHeading) {
+        let p: HTMLElement | null = privateHeading.parentElement;
+        for (let i = 0; i < 5 && p; i++) {
+          if (p.querySelector('[role="list"], [role="listitem"], ul, ol, li') || p.childElementCount > 2) {
+            container = p;
+            break;
+          }
+          p = p.parentElement;
+        }
+      }
+
+      const searchRoot = container || document.body;
+      const listItems = Array.from(searchRoot.querySelectorAll('[role="listitem"], li, div[data-comment-id]'));
+      
+      const parsedComments: { author?: string; text: string; time?: string }[] = [];
+
+      for (const item of listItems) {
+        const fullText = (item as HTMLElement).innerText?.trim() || '';
+        if (!fullText || /Add private comment/i.test(fullText)) continue;
+        
+        const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length >= 2) {
+          const author = lines[0];
+          const time = lines.length > 2 ? lines[1] : undefined;
+          const text = lines.slice(lines.length > 2 ? 2 : 1).join('\n');
+          parsedComments.push({ author, time, text });
+        } else if (lines.length === 1) {
+          parsedComments.push({ text: lines[0] });
+        }
+      }
+
+      return parsedComments;
+    });
+
+    emit({ courseId, workId, comments, count: comments.length, webFallbackUsed: true }, globals, (data) => {
+      if (data.comments.length === 0) {
+        console.log(pc.yellow('No private comments found on this assignment.'));
+        return;
+      }
+      console.log(pc.bold(pc.cyan(`\n💬 Private Comments (${data.comments.length}):`)));
+      for (const c of data.comments) {
+        console.log(`\n  ${pc.bold(c.author || 'User')} ${c.time ? pc.dim(`(${c.time})`) : ''}`);
+        console.log(`  ${c.text}`);
+      }
+      console.log('');
+    });
+  } catch (error: any) {
+    throw new AppError('WEB_AUTOMATION_FAILED', {
+      name: 'WebAutomationFailed',
+      human: 'Failed to list private comments via web automation.',
+      hint: error.message
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
