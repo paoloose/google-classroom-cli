@@ -701,7 +701,7 @@ export async function executeWebListPrivateComments(
     }, isClassComment);
 
     // Merge RPC detailed metadata with DOM extracted author names
-    const comments = (domExtracted.length > 0 ? domExtracted : capturedRpcComments).map((c: any) => {
+    const comments = domExtracted.map((c: any) => {
       const rpcMatch = capturedRpcComments.find(r => r.text === c.text);
       const isoTime = rpcMatch?.createTime;
       let displayTime = c.time;
