@@ -376,13 +376,24 @@ jobs:
             if [[ ! -f "${dir}/dist/classroom" && ! -f "${dir}/dist/classroom.exe" ]]; then
               echo "Tarball for $t missing binary" >&2
               exit 1
-            fi
+              fi
+            # Map target to npm's os/cpu fields so npm only installs the
+            # matching platform package as an optionalDependency.
+            case "$t" in
+              linux-x64)    os_val="linux";  cpu_val="x64"   ;;
+              linux-arm64)  os_val="linux";  cpu_val="arm64" ;;
+              darwin-x64)   os_val="darwin"; cpu_val="x64"   ;;
+              darwin-arm64) os_val="darwin"; cpu_val="arm64" ;;
+              windows-x64)  os_val="win32";  cpu_val="x64"   ;;
+            esac
             cat >"${dir}/package.json" <<EOF
           {
             "name": "@paoloose/google-classroom-cli-${t}",
             "version": "${version}",
             "description": "Prebuilt binary for @paoloose/google-classroom-cli (${t})",
             "license": "ISC",
+            "os": ["${os_val}"],
+            "cpu": ["${cpu_val}"],
             "files": [
               "dist",
               ".classroom-cli-version"
