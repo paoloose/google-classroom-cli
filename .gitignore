@@ -3,3 +3,6 @@ node_modules
 .vscode
 .skills-lock.json
 .agents
+# Build artifacts (created by local publish flow)
+npm-pkg/
+release-*/
