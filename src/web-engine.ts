@@ -299,36 +299,32 @@ export async function executeWebPostPrivateComment(
     
     const inputFound = await page.evaluate(async () => {
       for (let attempt = 0; attempt < 20; attempt++) {
-        // Find leaf element with "Private comments"
-        const allEls = Array.from(document.querySelectorAll('*')) as HTMLElement[];
-        const heading = allEls.find(el => {
-          const t = el.textContent?.trim().toLowerCase();
-          return (t === 'private comments' || t === 'comentarios privados') && el.children.length === 0;
-        }) || allEls.find(el => {
-          const t = el.innerText?.trim().toLowerCase();
-          return t === 'private comments' || t === 'comentarios privados';
-        });
-
-        let container: HTMLElement | null = null;
-        if (heading) {
-          let curr: HTMLElement | null = heading.parentElement;
-          while (curr && curr !== document.body) {
-            const text = curr.innerText || '';
-            if (/Your work|Tu trabajo|Class comments|Comentarios de la clase|Assigned|Asignada|Turn in|Entregar/i.test(text)) {
-              break;
+        let card = document.querySelector('div.PeGHgb.jbH5ac') as HTMLElement | null;
+        if (!card) {
+          const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+          const heading = all.find(el => {
+            const t = el.innerText?.trim().toLowerCase() || '';
+            return /^\d+\s+private comments?$/i.test(t) || t === 'private comments' || /^\d+\s+comentarios?\s+privados?$/i.test(t) || t === 'comentarios privados';
+          });
+          if (heading) {
+            let p: HTMLElement | null = heading.parentElement;
+            while (p && p !== document.body) {
+              if (!p.innerText.includes('Your work') && !p.innerText.includes('Class comments') && p.children.length > 1) {
+                card = p;
+                break;
+              }
+              p = p.parentElement;
             }
-            container = curr;
-            curr = curr.parentElement;
           }
         }
 
-        const root = container || document.body;
+        const root = card || document.body;
 
-        const inputs = Array.from(root.querySelectorAll('textarea, input, [contenteditable="true"]')) as HTMLElement[];
+        const inputs = Array.from(root.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]')) as HTMLElement[];
         const privateInput = inputs.find(el => {
           const placeholder = el.getAttribute('placeholder') || '';
           const aria = el.getAttribute('aria-label') || '';
-          return /private comment|comentario privado/i.test(placeholder) || /private comment|comentario privado/i.test(aria);
+          return /private comment|comentario privado|add comment to/i.test(placeholder) || /private comment|comentario privado|add comment to/i.test(aria);
         }) || inputs[0];
 
         if (privateInput) {
@@ -341,7 +337,7 @@ export async function executeWebPostPrivateComment(
         const placeholderEl = clickablePlaceholders.find(el => {
           const t = el.innerText?.trim() || '';
           const a = el.getAttribute('aria-label') || '';
-          return (/Add private comment|Añadir un comentario privado/i.test(t) || /Add private comment|Añadir un comentario privado/i.test(a)) && !el.querySelector('textarea, input');
+          return (/Add private comment|Añadir un comentario privado|Add comment to/i.test(t) || /Add private comment|Añadir un comentario privado|Add comment to/i.test(a)) && !el.querySelector('textarea, input, [contenteditable="true"]');
         });
 
         if (placeholderEl) {
@@ -369,7 +365,7 @@ export async function executeWebPostPrivateComment(
         (active as HTMLInputElement).value = msg;
         active.dispatchEvent(new Event('input', { bubbles: true }));
         active.dispatchEvent(new Event('change', { bubbles: true }));
-      } else if (active && active.getAttribute('contenteditable') === 'true') {
+      } else if (active && (active.getAttribute('contenteditable') === 'true' || active.getAttribute('role') === 'textbox')) {
         active.innerText = msg;
         active.dispatchEvent(new Event('input', { bubbles: true }));
       }
@@ -383,15 +379,17 @@ export async function executeWebPostPrivateComment(
     note(`Looking for Post button...`, globals);
     const posted = await page.evaluate(async () => {
       for (let attempt = 0; attempt < 20; attempt++) {
-        const buttons = Array.from(document.querySelectorAll('button')) as HTMLButtonElement[];
+        const card = document.querySelector('div.PeGHgb.jbH5ac') || document.body;
+        const buttons = Array.from(card.querySelectorAll('button, div[role="button"]')) as HTMLElement[];
         const postBtn = buttons.find(b => {
           const aria = b.getAttribute('aria-label') || '';
           const title = b.getAttribute('data-tooltip') || '';
           const text = b.innerText?.trim() || '';
-          return (/Post/i.test(text) || /Post/i.test(aria) || /Post/i.test(title) || /Send/i.test(aria) || /Publicar/i.test(text)) && !b.disabled;
+          const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true';
+          return (/Post/i.test(text) || /Post/i.test(aria) || /Post/i.test(title) || /Send/i.test(aria) || /Publicar/i.test(text)) && !isDisabled;
         });
 
-        if (postBtn && !postBtn.disabled) {
+        if (postBtn) {
           postBtn.click();
           return true;
         }
@@ -443,59 +441,48 @@ export async function executeWebListPrivateComments(
     await new Promise(r => setTimeout(r, 2500));
 
     const comments = await page.evaluate(() => {
-      // Find the isolated Private comments card
-      const allEls = Array.from(document.querySelectorAll('*')) as HTMLElement[];
-      const heading = allEls.find(el => {
-        const t = el.textContent?.trim().toLowerCase();
-        return (t === 'private comments' || t === 'comentarios privados') && el.children.length === 0;
-      }) || allEls.find(el => {
-        const t = el.innerText?.trim().toLowerCase();
-        return t === 'private comments' || t === 'comentarios privados';
-      });
-
-      if (!heading) return [];
-
-      let container: HTMLElement | null = null;
-      let curr: HTMLElement | null = heading.parentElement;
-      while (curr && curr !== document.body) {
-        const text = curr.innerText || '';
-        if (/Your work|Tu trabajo|Class comments|Comentarios de la clase|Assigned|Asignada|Turn in|Entregar/i.test(text)) {
-          break;
+      // 1. Locate the private comments card
+      let card = document.querySelector('div.PeGHgb.jbH5ac') as HTMLElement | null;
+      if (!card) {
+        const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+        const heading = all.find(el => {
+          const t = el.innerText?.trim().toLowerCase() || '';
+          return /^\d+\s+private comments?$/i.test(t) || t === 'private comments' || /^\d+\s+comentarios?\s+privados?$/i.test(t) || t === 'comentarios privados';
+        });
+        if (heading) {
+          let p: HTMLElement | null = heading.parentElement;
+          while (p && p !== document.body) {
+            if (!p.innerText.includes('Your work') && !p.innerText.includes('Class comments') && p.children.length > 1) {
+              card = p;
+              break;
+            }
+            p = p.parentElement;
+          }
         }
-        container = curr;
-        curr = curr.parentElement;
       }
 
-      if (!container) return [];
+      if (!card) return [];
 
-      // Find comment items strictly within this card
-      const listItems = Array.from(container.querySelectorAll('[role="listitem"], div[data-comment-id], div[role="article"]')) as HTMLElement[];
-      
+      const rawText = card.innerText || '';
+      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+      const ignored = /^(private comments?|\d+\s+private comments?|no private comments?|comentarios?\s+privados?|\d+\s+comentarios?\s+privados?|more_vert|more options|delete|eliminar|add private comment.*|add comment to .*|añadir un comentario privado.*|añadir comentario a .*|post|publicar|cancel|cancelar|private comments are only visible.*|los comentarios privados solo son visibles.*)$/i;
+
+      const validLines = lines.filter(l => !ignored.test(l));
+
       const parsedComments: { author?: string; text: string; time?: string }[] = [];
-      const ignorePatterns = /^(private comments|comentarios privados|add private comment|añadir un comentario privado|post|publicar|cancel|cancelar)$/i;
-      const menuNoise = /^(google drive|link|file|docs|slides|sheets|drawings|vids|more options|delete|eliminar)$/i;
-      const materialIcons = /^(more_vert|more_horiz|expand_more|expand_less|close|arrow_drop_down|send|delete|edit|reply|person|account_circle|arrow_forward)$/i;
-
-      for (const item of listItems) {
-        const fullText = item.innerText?.trim() || '';
-        if (!fullText || /Add private comment|Añadir un comentario privado/i.test(fullText)) continue;
-        
-        const lines = fullText
-          .split('\n')
-          .map(l => l.trim())
-          .filter(l => Boolean(l) && !ignorePatterns.test(l) && !menuNoise.test(l) && !materialIcons.test(l));
-        
-        if (lines.length === 0) continue;
-
-        if (lines.length >= 2) {
-          const author = lines[0];
-          const time = lines.length > 2 ? lines[1] : undefined;
-          const text = lines.slice(lines.length > 2 ? 2 : 1).join('\n');
-          if (text.trim() && !materialIcons.test(text.trim())) {
-            parsedComments.push({ author, time, text });
-          }
-        } else if (lines.length === 1 && lines[0].trim().length > 1 && !materialIcons.test(lines[0].trim())) {
-          parsedComments.push({ text: lines[0] });
+      
+      for (let i = 0; i < validLines.length; i++) {
+        const line = validLines[i];
+        if (line.includes('•') || line.includes('·')) {
+          const parts = line.split(/[•·]/).map(p => p.trim());
+          const author = parts[0];
+          const time = parts[1];
+          const text = validLines[i + 1] || '';
+          parsedComments.push({ author, time, text });
+          i++;
+        } else {
+          parsedComments.push({ text: line });
         }
       }
 
