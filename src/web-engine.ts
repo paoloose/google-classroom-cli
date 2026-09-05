@@ -438,40 +438,61 @@ export async function executeWebListPrivateComments(
     const page = await browser.newPage();
     const capturedRpcComments: { id?: string; createTime?: string; updateTime?: string; text: string }[] = [];
 
-    // Intercept Google Classroom internal RPCs for millisecond-precision timestamps
+    // Intercept Google Classroom internal RPCs for millisecond-precision timestamps (Zero hardcoded RPC IDs)
+    function extractCommentsFromRpcPayload(obj: any) {
+      if (!obj) return;
+      if (typeof obj === 'string') {
+        if (obj.startsWith('[') || obj.startsWith('{')) {
+          try { extractCommentsFromRpcPayload(JSON.parse(obj)); } catch {}
+        }
+        return;
+      }
+      if (Array.isArray(obj)) {
+        if (
+          obj.length >= 4 &&
+          Array.isArray(obj[0]) &&
+          typeof obj[0][0] === 'string' && /^\d+$/.test(obj[0][0]) &&
+          typeof obj[1] === 'number' && obj[1] > 1500000000000 && obj[1] < 3000000000000
+        ) {
+          const id = obj[0][0];
+          const createMs = obj[1];
+          const updateMs = typeof obj[2] === 'number' ? obj[2] : undefined;
+          let textContent = '';
+          for (let i = 3; i < obj.length; i++) {
+            const item = obj[i];
+            if (Array.isArray(item) && item[0] === 'edu.rt' && typeof item[1] === 'string') {
+              textContent = item[1];
+              break;
+            } else if (typeof item === 'string' && item.length > 0 && !/^\d+$/.test(item) && !item.startsWith('c:') && !item.includes('==')) {
+              textContent = item;
+            }
+          }
+          if (textContent && createMs) {
+            capturedRpcComments.push({
+              id,
+              createTime: new Date(createMs).toISOString(),
+              updateTime: updateMs ? new Date(updateMs).toISOString() : undefined,
+              text: textContent
+            });
+          }
+        }
+        for (const item of obj) {
+          extractCommentsFromRpcPayload(item);
+        }
+      }
+    }
+
     page.on('response', async (response) => {
       const reqUrl = response.url();
       if (reqUrl.includes('batchexecute') || reqUrl.includes('ClassroomUi')) {
         try {
           const text = await response.text();
-          if (text.includes('sLc6hf') || text.includes('hrq.cmt')) {
-            const lines = text.split('\n');
-            for (const line of lines) {
-              if (line.includes('sLc6hf')) {
-                try {
-                  const outer = JSON.parse(line);
-                  for (const item of outer) {
-                    if (Array.isArray(item) && item[1] === 'sLc6hf' && typeof item[2] === 'string') {
-                      const inner = JSON.parse(item[2]);
-                      const commentsList = inner[2] || [];
-                      for (const c of commentsList) {
-                        const id = c[0]?.[0];
-                        const createMs = c[1];
-                        const updateMs = c[2];
-                        const textContent = c[11]?.[1] || '';
-                        if (textContent && createMs) {
-                          capturedRpcComments.push({
-                            id,
-                            createTime: new Date(createMs).toISOString(),
-                            updateTime: updateMs ? new Date(updateMs).toISOString() : undefined,
-                            text: textContent
-                          });
-                        }
-                      }
-                    }
-                  }
-                } catch {}
-              }
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('[["wrb.fr"')) {
+              try {
+                extractCommentsFromRpcPayload(JSON.parse(line));
+              } catch {}
             }
           }
         } catch {}
