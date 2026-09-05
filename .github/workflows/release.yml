@@ -208,6 +208,7 @@ jobs:
     if: ${{ !contains(github.ref, '-') }}
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -218,6 +219,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Build npm packages (meta + 5 platform)
         env:
@@ -415,24 +417,16 @@ jobs:
             cd ..
           done
 
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (Trusted Publishing / OIDC)
         run: |
           set -euo pipefail
-          # Some npm versions / runner configs ignore NODE_AUTH_TOKEN. Writing the
-          # token into a project-local .npmrc is the most reliable way to make
-          # npm read it. (We avoid the global ~/.npmrc to keep the token out of
-          # any future log output paths.)
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-          npm whoami --registry=https://registry.npmjs.org/
           targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
           for t in "${targets[@]}"; do
             echo "==> publishing @paoloose/google-classroom-cli-${t}"
             cd "npm-pkg-${t}"
-            npm publish --access public --userconfig=../.npmrc
+            npm publish --provenance --access public
             cd ..
           done
           echo "==> publishing @paoloose/google-classroom-cli (meta)"
           cd npm-meta
-          npm publish --access public --userconfig=../.npmrc
+          npm publish --provenance --access public
