@@ -221,6 +221,19 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org/'
 
+      - name: Configure OIDC auth (strip empty token from .npmrc)
+        run: |
+          # setup-node writes "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}"
+          # to .npmrc. Since we don't set NODE_AUTH_TOKEN (we're using OIDC
+          # trusted publishing, not a token), the token resolves to empty.
+          # npm then sends an empty auth header → 404.
+          # Fix: rewrite .npmrc with just the registry URL, no authToken.
+          # npm publish --provenance will then use the GitHub OIDC token
+          # for auth via npm's trusted publishing flow.
+          NPMRC="$(npm config get userconfig)"
+          echo "registry=https://registry.npmjs.org/" > "$NPMRC"
+          cat "$NPMRC"
+
       - name: Build npm packages (meta + 5 platform)
         env:
           REF_NAME: ${{ github.ref_name }}
