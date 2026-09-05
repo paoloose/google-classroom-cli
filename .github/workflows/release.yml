@@ -175,6 +175,8 @@ jobs:
             # Expect: classroom-cli_<target>.tar.gz
             target="${base#classroom-cli_}"
             target="${target%.tar.gz}"
+            # Skip the source tarball — it's not a platform target.
+            [[ "$target" == "source" ]] && continue
             case " $ALLOWED " in
               *" $target "*) ;;
               *) echo "Refusing to publish: target '$target' is not in the allow-list ($ALLOWED)" >&2; exit 1 ;;
