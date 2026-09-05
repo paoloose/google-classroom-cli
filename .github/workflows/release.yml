@@ -208,7 +208,6 @@ jobs:
     if: ${{ !contains(github.ref, '-') }}
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -219,11 +218,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          # registry-url: triggers setup-node's automatic OIDC token exchange with
-          # the npm registry. Combined with `permissions: id-token: write` on the
-          # job, this is what makes `npm publish` authenticate via Trusted
-          # Publishing instead of needing an NPM_TOKEN secret.
-          registry-url: 'https://registry.npmjs.org/'
 
       - name: Build npm packages (meta + 5 platform)
         env:
@@ -416,15 +410,21 @@ jobs:
             cd ..
           done
 
-      - name: Publish to npm (Trusted Publishing / OIDC)
+      - name: Publish to npm
+        env:
+          # Bootstrap: NPM_TOKEN (granular access token with publish scope, 2FA
+          # bypass, package scope @paoloose/*) is used for the first publish of
+          # each new package. Trusted Publishing is per-package and can only be
+          # configured for a package after it exists, so the 5 platform-specific
+          # packages each need at least one token-based publish before OIDC can
+          # take over for them.
+          #
+          # After this publish succeeds, go to each of the 6 package pages on
+          # npmjs.com and add a GitHub Actions trusted publisher. Then remove
+          # NODE_AUTH_TOKEN from this step and re-run to switch fully to OIDC.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          # Publish the platform packages first, then the meta package. Order matters:
-          # the meta package's optionalDependencies point at exact versions, so the
-          # platform packages must already exist on the registry when npm installs
-          # the meta package — but publishing order doesn't actually enforce that
-          # (npm doesn't resolve optionalDependencies at publish time). We do it in
-          # this order anyway for clarity.
           targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
           for t in "${targets[@]}"; do
             echo "==> publishing @paoloose/google-classroom-cli-${t}"
