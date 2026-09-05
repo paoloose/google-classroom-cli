@@ -436,12 +436,54 @@ export async function executeWebListPrivateComments(
 
   try {
     const page = await browser.newPage();
+    const capturedRpcComments: { id?: string; createTime?: string; updateTime?: string; text: string }[] = [];
+
+    // Intercept Google Classroom internal RPCs for millisecond-precision timestamps
+    page.on('response', async (response) => {
+      const reqUrl = response.url();
+      if (reqUrl.includes('batchexecute') || reqUrl.includes('ClassroomUi')) {
+        try {
+          const text = await response.text();
+          if (text.includes('sLc6hf') || text.includes('hrq.cmt')) {
+            const lines = text.split('\n');
+            for (const line of lines) {
+              if (line.includes('sLc6hf')) {
+                try {
+                  const outer = JSON.parse(line);
+                  for (const item of outer) {
+                    if (Array.isArray(item) && item[1] === 'sLc6hf' && typeof item[2] === 'string') {
+                      const inner = JSON.parse(item[2]);
+                      const commentsList = inner[2] || [];
+                      for (const c of commentsList) {
+                        const id = c[0]?.[0];
+                        const createMs = c[1];
+                        const updateMs = c[2];
+                        const textContent = c[11]?.[1] || '';
+                        if (textContent && createMs) {
+                          capturedRpcComments.push({
+                            id,
+                            createTime: new Date(createMs).toISOString(),
+                            updateTime: updateMs ? new Date(updateMs).toISOString() : undefined,
+                            text: textContent
+                          });
+                        }
+                      }
+                    }
+                  }
+                } catch {}
+              }
+            }
+          }
+        } catch {}
+      }
+    });
+
     note(`Navigating to assignment...`, globals);
     await page.goto(url, { waitUntil: 'networkidle2' });
 
     await new Promise(r => setTimeout(r, 2500));
 
-    const comments = await page.evaluate(() => {
+    const domExtracted = await page.evaluate(() => {
       // 1. Locate the private comments card semantically (zero hardcoded minified classes)
       const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
       const candidates = all.filter(el => {
@@ -462,7 +504,7 @@ export async function executeWebListPrivateComments(
         return (t.includes(' • ') || t.includes(' · ')) && el.children.length <= 2 && t.length < 80;
       });
 
-      const parsedComments: { author?: string; time?: string; text: string }[] = [];
+      const parsed: { author?: string; time?: string; text: string }[] = [];
 
       for (const aNode of authorNodes) {
         const aText = aNode.textContent?.trim() || '';
@@ -483,11 +525,35 @@ export async function executeWebListPrivateComments(
         }
 
         if (author && bodyText) {
-          parsedComments.push({ author, time, text: bodyText });
+          parsed.push({ author, time, text: bodyText });
         }
       }
 
-      return parsedComments;
+      return parsed;
+    });
+
+    // Merge RPC detailed metadata with DOM extracted author names
+    const comments = (domExtracted.length > 0 ? domExtracted : capturedRpcComments).map((c: any) => {
+      const rpcMatch = capturedRpcComments.find(r => r.text === c.text);
+      const isoTime = rpcMatch?.createTime;
+      let displayTime = c.time;
+      if (isoTime) {
+        try {
+          const d = new Date(isoTime);
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          displayTime = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        } catch {
+          displayTime = isoTime;
+        }
+      }
+
+      return {
+        id: rpcMatch?.id,
+        author: c.author || 'User',
+        time: displayTime,
+        isoTime: isoTime || undefined,
+        text: c.text
+      };
     });
 
     emit({ courseId, workId, comments, count: comments.length, webFallbackUsed: true }, globals, (data) => {
