@@ -102,10 +102,10 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
 - `classroom guardian invite <student_id> --email="<email>"`
   - Send a guardian invitation.
 
-## Course Context & URL Reference Resolution
+## Course Context & URL / Base64 Reference Resolution
 
 - **Active Course Context:** Most course-scoped commands accept the course id positionally, but if you omit it (or pass only the trailing resource id for `* get` / `submissions list` / `submit` / `turn-in` / `unsubmit` / `comment *`), the CLI falls back to the **active course context**. Pin one with `course select <id>` (or interactively with `course select`), clear with `course deselect`, and inspect with `course current`.
-- **Direct Link / URL References:** Any command accepting a course ID or resource ID can also accept a full Google Classroom URL (e.g. `https://classroom.google.com/c/ODc2NDQxOTM5MDY2` or `https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details`). The CLI automatically decodes base64 identifiers and extracts both `courseId` and the specific `workId`/`materialId`/`announcementId`/`topicId`.
+- **Direct Link / Base64 ID References:** Any command accepting a course ID or resource ID can also accept a full Google Classroom URL (e.g. `https://classroom.google.com/c/ODc2NDQxOTM5MDY2` or `https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details`) or raw **Base64-encoded IDs** (e.g. `ODc2NDQxOTM5MDY2`). The CLI automatically decodes base64 identifiers and extracts both `courseId` and the specific `workId`/`materialId`/`announcementId`/`topicId`.
 
 ## Global Filtering Flags
 

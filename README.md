@@ -218,11 +218,15 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
-## 🔗 Direct Link & URL Reference Support
+## 🔗 Direct Link & Base64 URL Reference Support
 
-You can pass full Google Classroom URLs directly to any command instead of looking up numeric IDs. The CLI automatically extracts and base64-decodes both the **Course ID** and the **Resource ID** (assignment, material, announcement, topic):
+You can pass full Google Classroom URLs or **Base64-encoded IDs** directly to any command instead of looking up numeric IDs. The CLI automatically extracts and base64-decodes both the **Course ID** and the **Resource ID** (assignment, material, announcement, topic):
 
 ```bash
+# Pass Base64 IDs directly:
+classroom course get ODc2NDQxOTM5MDY2
+classroom work get ODc2NDQxOTM5MDY2 ODc2NDQwMzA3NTk2
+
 # Get or select a course directly by URL:
 classroom course get https://classroom.google.com/c/ODc2NDQxOTM5MDY2
 classroom course select https://classroom.google.com/c/ODc2NDQxOTM5MDY2

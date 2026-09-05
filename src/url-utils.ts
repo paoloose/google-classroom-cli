@@ -16,7 +16,10 @@ export function decodeClassroomIdentifier(raw?: string): string | undefined {
     return trimmed;
   }
   try {
-    const decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+    const normalized = trimmed.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalized.length % 4;
+    const padded = pad ? normalized + '='.repeat(4 - pad) : normalized;
+    const decoded = Buffer.from(padded, 'base64').toString('utf8');
     if (/^\d+$/.test(decoded)) {
       return decoded;
     }
