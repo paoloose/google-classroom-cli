@@ -352,9 +352,6 @@ jobs:
               "@paoloose/google-classroom-cli-linux-arm64":  "${version}",
               "@paoloose/google-classroom-cli-linux-x64":    "${version}",
               "@paoloose/google-classroom-cli-windows-x64":  "${version}"
-            },
-            "publishConfig": {
-              "provenance": true
             }
           }
           EOF
@@ -389,10 +386,7 @@ jobs:
             "files": [
               "dist",
               ".classroom-cli-version"
-            ],
-            "publishConfig": {
-              "provenance": true
-            }
+            ]
           }
           EOF
             echo "  ✔ staged ${dir}"
@@ -414,14 +408,20 @@ jobs:
         env:
           # Bootstrap: NPM_TOKEN (granular access token with publish scope, 2FA
           # bypass, package scope @paoloose/*) is used for the first publish of
-          # each new package. Trusted Publishing is per-package and can only be
-          # configured for a package after it exists, so the 5 platform-specific
-          # packages each need at least one token-based publish before OIDC can
-          # take over for them.
+          # each new package. Trusted Publishing is per-package and only works
+          # for packages that already exist, so the 5 platform-specific packages
+          # need at least one token-based publish before OIDC can take over.
           #
           # After this publish succeeds, go to each of the 6 package pages on
-          # npmjs.com and add a GitHub Actions trusted publisher. Then remove
-          # NODE_AUTH_TOKEN from this step and re-run to switch fully to OIDC.
+          # npmjs.com and add a GitHub Actions trusted publisher. Then we can
+          # switch back to `--provenance` + OIDC by removing NODE_AUTH_TOKEN and
+          # re-adding `registry-url: https://registry.npmjs.org/` to setup-node.
+          #
+          # Note: `--provenance` is intentionally omitted here. npm enforces
+          # that `--provenance` requires OIDC auth (Trusted Publishing), and
+          # OIDC isn't configured for these new packages yet. The trade-off is
+          # no provenance attestation on the bootstrap publish; we add it back
+          # once each package has Trusted Publishing enabled.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
@@ -429,9 +429,9 @@ jobs:
           for t in "${targets[@]}"; do
             echo "==> publishing @paoloose/google-classroom-cli-${t}"
             cd "npm-pkg-${t}"
-            npm publish --provenance --access public
+            npm publish --access public
             cd ..
           done
           echo "==> publishing @paoloose/google-classroom-cli (meta)"
           cd npm-meta
-          npm publish --provenance --access public
+          npm publish --access public
