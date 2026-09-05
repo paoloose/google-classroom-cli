@@ -220,7 +220,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build npm package (multi-platform)
+      - name: Build npm packages (meta + 5 platform)
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -232,73 +232,53 @@ jobs:
             exit 1
           fi
 
-          # All 5 build targets we ship. Order matters for the human-readable
-          # listing; npm pack just tarballs whatever's in npm-pkg/ anyway.
+          # Layout we produce:
+          #   npm-meta/                 ← the @paoloose/google-classroom-cli meta package
+          #   npm-pkg-linux-x64/        ← @paoloose/google-classroom-cli-linux-x64
+          #   npm-pkg-linux-arm64/      ← @paoloose/google-classroom-cli-linux-arm64
+          #   npm-pkg-darwin-x64/       ← @paoloose/google-classroom-cli-darwin-x64
+          #   npm-pkg-darwin-arm64/     ← @paoloose/google-classroom-cli-darwin-arm64
+          #   npm-pkg-windows-x64/      ← @paoloose/google-classroom-cli-windows-x64
+          #
+          # The meta package declares each of those as `optionalDependencies`. npm
+          # only installs the optional deps whose `os`/`cpu` (or whose name in
+          # `optionalDependencies`) matches the user's platform — so users on Linux
+          # x64 only download the linux-x64 binary (~40 MB), not all 5.
+
           targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
 
-          rm -rf npm-pkg
-          mkdir -p npm-pkg/bin
+          rm -rf npm-meta npm-pkg-*
 
-          # Extract every per-platform tarball into its own subdir under npm-pkg/bin/.
-          # Each tarball has the layout: dist/classroom[.exe] and .classroom-cli-version
-          # (the build workflow unpacks the bun binary into dist/, then the GitHub
-          # Release workflow re-archives that into classroom-cli_<target>.tar.gz).
-          for t in "${targets[@]}"; do
-            tarball="dist/classroom-cli-${t}/classroom-cli_${t}.tar.gz"
-            if [[ ! -f "$tarball" ]]; then
-              echo "Missing tarball for $t: $tarball" >&2
-              ls -R dist || true
-              exit 1
-            fi
-            mkdir -p "npm-pkg/bin/${t}"
-            tar -xzf "$tarball" -C "npm-pkg/bin/${t}"
-            # Sanity: each platform should have a binary at bin/<target>/dist/classroom[.exe]
-            if [[ ! -f "npm-pkg/bin/${t}/dist/classroom" && ! -f "npm-pkg/bin/${t}/dist/classroom.exe" ]]; then
-              echo "Tarball for $t does not contain a binary" >&2
-              ls -la "npm-pkg/bin/${t}/dist" >&2 || true
-              exit 1
-            fi
-            echo "  ✔ extracted $t"
-          done
+          mkdir -p npm-meta/bin
 
-          # Pick any platform's version marker — they're all the same (set from the tag).
-          cp "npm-pkg/bin/linux-x64/.classroom-cli-version" "npm-pkg/.classroom-cli-version"
-
-          # JS launcher: lives at npm-pkg/bin/classroom.js, executed by Node when
-          # the user runs `classroom ...` after `npm i -g`. Picks the right
-          # binary based on process.platform + process.arch, execs it with
-          # process.argv forwarded, and propagates the exit code.
-          cat >npm-pkg/bin/classroom.js <<'JS'
+          # The JS launcher is identical to before, except the binary path now
+          # points at the platform-specific package via require.resolve, instead
+          # of a bundled `bin/<target>/dist/classroom` path. require.resolve
+          # works because `optionalDependencies` are real node_modules entries.
+          cat >npm-meta/bin/classroom.js <<'JS'
           #!/usr/bin/env node
           // Platform-to-binary resolver for @paoloose/google-classroom-cli.
-          // Picks one of the bundled prebuilt binaries under bin/<target>/dist/
-          // and exec's it. Forwards argv, env, stdin/stdout/stderr, and exit code.
+          // Requires the matching platform-specific package (installed as an
+          // optionalDependency) and spawns its bundled binary.
           import { spawn } from "node:child_process";
-          import { fileURLToPath } from "node:url";
-          import { dirname, join } from "node:path";
+          import { createRequire } from "node:module";
           import { existsSync } from "node:fs";
 
-          const here = dirname(fileURLToPath(import.meta.url));
-          const pkgRoot = dirname(here);
-
           const PLATFORM_MAP = {
-            "linux-x64":    { platform: "linux",   arch: "x64"   },
-            "linux-arm64":  { platform: "linux",   arch: "arm64" },
-            "darwin-x64":   { platform: "darwin",  arch: "x64"   },
-            "darwin-arm64": { platform: "darwin",  arch: "arm64" },
-            "windows-x64":  { platform: "win32",   arch: "x64"   },
+            "linux-x64":    { platform: "linux",   arch: "x64",   pkg: "@paoloose/google-classroom-cli-linux-x64",    binary: "dist/classroom"    },
+            "linux-arm64":  { platform: "linux",   arch: "arm64", pkg: "@paoloose/google-classroom-cli-linux-arm64",  binary: "dist/classroom"    },
+            "darwin-x64":   { platform: "darwin",  arch: "x64",   pkg: "@paoloose/google-classroom-cli-darwin-x64",   binary: "dist/classroom"    },
+            "darwin-arm64": { platform: "darwin",  arch: "arm64", pkg: "@paoloose/google-classroom-cli-darwin-arm64", binary: "dist/classroom"    },
+            "windows-x64":  { platform: "win32",   arch: "x64",   pkg: "@paoloose/google-classroom-cli-windows-x64",  binary: "dist/classroom.exe"},
           };
 
-          function resolve() {
-            const p = process.platform;
-            const a = process.arch;
+          const target = (() => {
             for (const [name, info] of Object.entries(PLATFORM_MAP)) {
-              if (info.platform === p && info.arch === a) return name;
+              if (info.platform === process.platform && info.arch === process.arch) return { name, ...info };
             }
             return null;
-          }
+          })();
 
-          const target = resolve();
           if (!target) {
             process.stderr.write(
               `classroom: no prebuilt binary for ${process.platform}/${process.arch}\n` +
@@ -309,33 +289,44 @@ jobs:
             process.exit(1);
           }
 
-          const ext = target.startsWith("windows-") ? ".exe" : "";
-          const binary = join(pkgRoot, "bin", target, "dist", `classroom${ext}`);
-          if (!existsSync(binary)) {
-            process.stderr.write(`classroom: expected binary missing: ${binary}\n`);
+          let binaryPath;
+          try {
+            const require = createRequire(import.meta.url);
+            const pkgJsonPath = require.resolve(`${target.pkg}/package.json`);
+            binaryPath = pkgJsonPath.replace(/package\.json$/, target.binary);
+          } catch (e) {
+            process.stderr.write(
+              `classroom: failed to locate ${target.pkg} (${e.code || e.message}).\n` +
+              `This usually means the platform-specific package was not installed.\n` +
+              `Re-run: npm i -g @paoloose/google-classroom-cli\n`,
+            );
+            process.exit(1);
+          }
+          if (!existsSync(binaryPath)) {
+            process.stderr.write(`classroom: expected binary missing: ${binaryPath}\n`);
             process.exit(1);
           }
 
-          const child = spawn(binary, process.argv.slice(2), {
+          const child = spawn(binaryPath, process.argv.slice(2), {
             stdio: "inherit",
             env: process.env,
           });
           child.on("exit", (code, signal) => {
-            if (signal) {
-              process.kill(process.pid, signal);
-            } else {
-              process.exit(code ?? 1);
-            }
+            if (signal) { process.kill(process.pid, signal); } else { process.exit(code ?? 1); }
           });
           child.on("error", (err) => {
-            process.stderr.write(`classroom: failed to spawn ${binary}: ${err.message}\n`);
+            process.stderr.write(`classroom: failed to spawn ${binaryPath}: ${err.message}\n`);
             process.exit(1);
           });
           JS
-          chmod +x npm-pkg/bin/classroom.js
+          chmod +x npm-meta/bin/classroom.js
 
-          # package.json: bin points at the launcher, files include all 5 bins.
-          cat >npm-pkg/package.json <<EOF
+          # Pick any platform's version marker — they're all the same (set from the tag).
+          cp "dist/classroom-cli-linux-x64/.classroom-cli-version" "npm-meta/.classroom-cli-version" 2>/dev/null || \
+            cp "dist/classroom-cli-linux-x64/.classroom-cli-version" "npm-meta/.classroom-cli-version"
+
+          # Meta package's package.json with optionalDependencies for each platform.
+          cat >npm-meta/package.json <<EOF
           {
             "name": "@paoloose/google-classroom-cli",
             "version": "${version}",
@@ -352,6 +343,13 @@ jobs:
             "engines": {
               "node": ">=18"
             },
+            "optionalDependencies": {
+              "@paoloose/google-classroom-cli-darwin-arm64": "${version}",
+              "@paoloose/google-classroom-cli-darwin-x64":   "${version}",
+              "@paoloose/google-classroom-cli-linux-arm64":  "${version}",
+              "@paoloose/google-classroom-cli-linux-x64":    "${version}",
+              "@paoloose/google-classroom-cli-windows-x64":  "${version}"
+            },
             "publishConfig": {
               "provenance": true
             }
@@ -359,30 +357,72 @@ jobs:
           EOF
 
           if [[ -f README.md ]]; then
-            cp README.md npm-pkg/README.md
+            cp README.md npm-meta/README.md
           fi
 
-          cd npm-pkg
-          echo "=== Staged files ==="
-          ls -la
-          echo ""
-          echo "=== Binaries per platform ==="
+          # Build each platform-specific package. Each one contains just `dist/<binary>`
+          # and a `.classroom-cli-version` marker, with a package.json that pins the
+          # binary's exact location for the launcher to find via require.resolve.
           for t in "${targets[@]}"; do
-            size=$(du -h "bin/${t}/dist/classroom" 2>/dev/null | cut -f1 || echo "?")
-            echo "  $t: $size"
+            tarball="dist/classroom-cli-${t}/classroom-cli_${t}.tar.gz"
+            if [[ ! -f "$tarball" ]]; then
+              echo "Missing tarball for $t: $tarball" >&2
+              exit 1
+            fi
+            dir="npm-pkg-${t}"
+            mkdir -p "${dir}/dist"
+            tar -xzf "$tarball" -C "${dir}"
+            # Sanity: a binary should be at <dir>/dist/classroom[.exe]
+            if [[ ! -f "${dir}/dist/classroom" && ! -f "${dir}/dist/classroom.exe" ]]; then
+              echo "Tarball for $t missing binary" >&2
+              exit 1
+            fi
+            cat >"${dir}/package.json" <<EOF
+          {
+            "name": "@paoloose/google-classroom-cli-${t}",
+            "version": "${version}",
+            "description": "Prebuilt binary for @paoloose/google-classroom-cli (${t})",
+            "license": "ISC",
+            "files": [
+              "dist",
+              ".classroom-cli-version"
+            ],
+            "publishConfig": {
+              "provenance": true
+            }
+          }
+          EOF
+            echo "  ✔ staged ${dir}"
           done
+
+          echo "=== Meta package ==="
+          cd npm-meta && npm pack --dry-run 2>&1 | grep -E "notice [0-9]|total files|package size"
+          cd ..
           echo ""
-          echo "=== npm pack dry-run ==="
-          npm pack --dry-run 2>&1 | grep -E "notice [0-9]|total files|package size"
-          echo "✔ npm package staged for ${#targets[@]} platforms as version $version"
+          echo "=== Platform packages ==="
+          for t in "${targets[@]}"; do
+            echo "--- $t ---"
+            cd "npm-pkg-${t}"
+            npm pack --dry-run 2>&1 | grep -E "notice [0-9]|total files|package size"
+            cd ..
+          done
 
       - name: Publish to npm (Trusted Publishing / OIDC)
         run: |
           set -euo pipefail
-          # Trusted publishing via OIDC: npm picks up the workflow's id-token
-          # (granted by `permissions: id-token: write` above) and verifies it
-          # against the trusted-publisher config on the package page at
-          # npmjs.com. Requires that a GitHub Actions trusted publisher has
-          # been added on the package page (Settings → Trusted Publishers).
-          cd npm-pkg
+          # Publish the platform packages first, then the meta package. Order matters:
+          # the meta package's optionalDependencies point at exact versions, so the
+          # platform packages must already exist on the registry when npm installs
+          # the meta package — but publishing order doesn't actually enforce that
+          # (npm doesn't resolve optionalDependencies at publish time). We do it in
+          # this order anyway for clarity.
+          targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
+          for t in "${targets[@]}"; do
+            echo "==> publishing @paoloose/google-classroom-cli-${t}"
+            cd "npm-pkg-${t}"
+            npm publish --provenance --access public
+            cd ..
+          done
+          echo "==> publishing @paoloose/google-classroom-cli (meta)"
+          cd npm-meta
           npm publish --provenance --access public
