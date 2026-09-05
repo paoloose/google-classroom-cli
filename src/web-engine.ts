@@ -8,6 +8,42 @@ import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import pc from 'picocolors';
 
+export function getChromeExecutablePath(): string {
+  if (process.env.CHROME_PATH && existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) return process.env.PUPPETEER_EXECUTABLE_PATH;
+
+  if (process.platform === 'darwin') {
+    const macPaths = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      `${process.env.HOME}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`,
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+    ];
+    for (const p of macPaths) {
+      if (existsSync(p)) return p;
+    }
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  } else if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const winPaths = [
+      `${programFiles}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${programFilesX86}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${programFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${programFilesX86}\\Microsoft\\Edge\\Application\\msedge.exe`
+    ];
+    for (const p of winPaths) {
+      if (existsSync(p)) return p;
+    }
+    return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  }
+
+  return 'google-chrome';
+}
+
 export async function performWebLoginHandshake(profile: Profile, globals: GlobalFlags) {
   note(`Starting web login handshake for profile '${profile.name}'...`, globals);
   
@@ -20,12 +56,7 @@ export async function performWebLoginHandshake(profile: Profile, globals: Global
   console.log(pc.cyan('Step 1:'), 'Log into Google Classroom in the window that just opened.');
   console.log(pc.cyan('Step 2:'), 'Once you see your Classroom dashboard, fully QUIT Chrome by pressing Cmd+Q (macOS) or closing all windows.');
   
-  let chromePath = 'google-chrome';
-  if (process.platform === 'darwin') {
-    chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  } else if (process.platform === 'win32') {
-    chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-  }
+  const chromePath = getChromeExecutablePath();
 
   // Launch Chrome totally detached from agent-browser so webdriver=false
   const chromeProcess = spawn(chromePath, [
@@ -46,25 +77,30 @@ export async function performWebLoginHandshake(profile: Profile, globals: Global
   emit({ webHandshakeComplete: true, profile: profile.name }, globals, () => console.log(pc.green(`\n✔ Successfully locked in web session for profile '${profile.name}'.`)));
 }
 
-export async function launchWebEngine(profile: Profile) {
-  let chromePath = 'google-chrome';
-  if (process.platform === 'darwin') {
-    chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  } else if (process.platform === 'win32') {
-    chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const activeBrowsers: any[] = [];
+process.once('SIGINT', async () => {
+  for (const b of activeBrowsers) {
+    try { await b.close(); } catch {}
   }
+  process.exit(130);
+});
+
+export async function launchWebEngine(profile: Profile) {
+  const chromePath = getChromeExecutablePath();
 
   // Import puppeteer dynamically to keep CLI startup fast
   const puppeteer = (await import('puppeteer')).default;
   const isHeaded = process.env.CLASSROOM_HEADED === 'true';
 
-  return await puppeteer.launch({
+  const browser = await puppeteer.launch({
     executablePath: chromePath,
     headless: !isHeaded,
     userDataDir: profile.paths.browserData,
     ignoreDefaultArgs: ['--use-mock-keychain', '--password-store=basic', '--enable-automation'],
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
   });
+  activeBrowsers.push(browser);
+  return browser;
 }
 
 async function executeWebActionFlow(
@@ -93,14 +129,17 @@ async function executeWebActionFlow(
       const doneRegex = new RegExp(doneStr, 'i');
       
       for (let i = 0; i < 20; i++) {
-        const buttons = Array.from(document.querySelectorAll('button'));
+        const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
         
         if (buttons.some(b => doneRegex.test(b.innerText?.trim() || ''))) {
           return 'ALREADY_DONE';
         }
         
-        const btn = buttons.find(b => btnRegex.test(b.innerText?.trim() || ''));
-        if (btn && !btn.disabled) {
+        const btn = buttons.find(b => {
+          const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
+          return btnRegex.test(b.innerText?.trim() || '') && !isDisabled;
+        });
+        if (btn) {
           btn.click();
           return 'CLICKED';
         }
@@ -122,10 +161,10 @@ async function executeWebActionFlow(
 
     const modalClicked = await page.evaluate((modalStr) => {
       const regex = new RegExp(modalStr, 'i');
-      const dialogs = document.querySelectorAll('[role="dialog"]');
+      const dialogs = document.querySelectorAll('[role="dialog"], div[aria-modal="true"]');
       const firstDialog = dialogs[0];
       if (firstDialog) {
-        const modalBtns = Array.from(firstDialog.querySelectorAll('button'));
+        const modalBtns = Array.from(firstDialog.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
         const confirmBtn = modalBtns.find(b => regex.test(b.innerText?.trim() || ''));
         if (confirmBtn) {
           confirmBtn.click();
@@ -150,6 +189,8 @@ async function executeWebActionFlow(
       hint: error.message
     });
   } finally {
+    const idx = activeBrowsers.indexOf(browser);
+    if (idx !== -1) activeBrowsers.splice(idx, 1);
     await browser.close();
   }
 }
@@ -231,8 +272,11 @@ export async function executeWebEnroll(
       for (let attempt = 0; attempt < 10; attempt++) {
         const dialog = document.querySelector('[role="dialog"], div[aria-modal="true"]');
         if (dialog) {
-          const btns = Array.from(dialog.querySelectorAll('button')) as HTMLButtonElement[];
-          const joinBtn = btns.find(b => /Join|Unirme|Unirse/i.test(b.innerText?.trim() || '') && !b.disabled && !b.hasAttribute('disabled'));
+          const btns = Array.from(dialog.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
+          const joinBtn = btns.find(b => {
+            const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
+            return /Join|Unirme|Unirse/i.test(b.innerText?.trim() || '') && !isDisabled;
+          });
           if (joinBtn) {
             joinBtn.click();
             return true;
@@ -329,9 +373,12 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       
       const addMenuOpened = await page.evaluate(async () => {
         for (let i = 0; i < 20; i++) {
-          const buttons = Array.from(document.querySelectorAll('button'));
-          const addBtn = buttons.find(b => /Add or create|Añadir o crear/i.test(b.innerText?.trim() || ''));
-          if (addBtn && !addBtn.disabled) {
+          const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
+          const addBtn = buttons.find(b => {
+            const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
+            return /Add or create|Añadir o crear/i.test(b.innerText?.trim() || '') && !isDisabled;
+          });
+          if (addBtn) {
             addBtn.click();
             return true;
           }
@@ -345,10 +392,10 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       await new Promise(r => setTimeout(r, 800));
       
       const linkMenuItemClicked = await page.evaluate(() => {
-        const items = Array.from(document.querySelectorAll('[role="menuitem"], li, button'));
-        const linkItem = items.find(el => /Link|Enlace/i.test((el as HTMLElement).innerText?.trim() || ''));
+        const items = Array.from(document.querySelectorAll('[role="menuitem"], li, button, div[role="button"], span[role="button"]')) as HTMLElement[];
+        const linkItem = items.find(el => /Link|Enlace/i.test(el.innerText?.trim() || ''));
         if (linkItem) {
-          (linkItem as HTMLElement).click();
+          linkItem.click();
           return true;
         }
         return false;
@@ -372,8 +419,11 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
         
         await new Promise(r => setTimeout(r, 500));
         
-        const dialogBtns = Array.from(firstDialog.querySelectorAll('button'));
-        const addLinkBtn = dialogBtns.find(b => /Add link|Añadir enlace/i.test(b.innerText?.trim() || '') && !b.disabled);
+        const dialogBtns = Array.from(firstDialog.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
+        const addLinkBtn = dialogBtns.find(b => {
+          const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
+          return /Add link|Añadir enlace/i.test(b.innerText?.trim() || '') && !isDisabled;
+        });
         if (addLinkBtn) {
           addLinkBtn.click();
           return true;
@@ -386,7 +436,7 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
       note(`Waiting for Google Classroom to process the attachment...`, globals);
       // Fast poll until dialog disappears
       for (let p = 0; p < 15; p++) {
-        const dialogOpen = await page.evaluate(() => !!document.querySelector('[role="dialog"] input'));
+        const dialogOpen = await page.evaluate(() => !!document.querySelector('[role="dialog"] input, div[aria-modal="true"] input'));
         if (!dialogOpen) break;
         await new Promise(r => setTimeout(r, 500));
       }

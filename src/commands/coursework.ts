@@ -13,29 +13,31 @@ import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 async function getPendingTasks(classroom: any, globals: any) {
   const coursesRes = await classroom.courses.list({ courseStates: ['ACTIVE'] });
   const courses = coursesRes.data.courses || [];
-  const pendingTasks: {course: string, courseId: string, submission: any, courseWork: any}[] = [];
+  const pendingTasks: { course: string; courseId: string; submission: any; courseWork: any }[] = [];
   
-  for (const course of courses) {
-    try {
-      const [submissionsRes, cwRes] = await Promise.all([
-        classroom.courses.courseWork.studentSubmissions.list({ courseId: course.id, courseWorkId: '-', userId: 'me' }),
-        classroom.courses.courseWork.list({ courseId: course.id })
-      ]);
-      const submissions = submissionsRes.data.studentSubmissions || [];
-      const courseWorkList = cwRes.data.courseWork || [];
-      const cwMap = new Map(courseWorkList.map((cw: any) => [cw.id, cw]));
+  await Promise.all(
+    courses.map(async (course: any) => {
+      try {
+        const [submissionsRes, cwRes] = await Promise.all([
+          classroom.courses.courseWork.studentSubmissions.list({ courseId: course.id, courseWorkId: '-', userId: 'me' }),
+          classroom.courses.courseWork.list({ courseId: course.id })
+        ]);
+        const submissions = submissionsRes.data.studentSubmissions || [];
+        const courseWorkList = cwRes.data.courseWork || [];
+        const cwMap = new Map(courseWorkList.map((cw: any) => [cw.id, cw]));
 
-      for (const sub of submissions) {
-        if (sub.state === 'NEW' || sub.state === 'CREATED' || sub.state === 'RECLAIMED_BY_STUDENT') {
-          const cw = cwMap.get(sub.courseWorkId);
-          if (cw) {
-            pendingTasks.push({ course: course.name, courseId: course.id, submission: sub, courseWork: cw });
+        for (const sub of submissions) {
+          if (sub.state === 'NEW' || sub.state === 'CREATED' || sub.state === 'RECLAIMED_BY_STUDENT') {
+            const cw = cwMap.get(sub.courseWorkId);
+            if (cw) {
+              pendingTasks.push({ course: course.name, courseId: course.id, submission: sub, courseWork: cw });
+            }
           }
         }
+      } catch (e: any) {
       }
-    } catch (e: any) {
-    }
-  }
+    })
+  );
   return pendingTasks;
 }
 

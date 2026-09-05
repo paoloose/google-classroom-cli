@@ -90,28 +90,43 @@ export async function downloadFromDrive(fileId: string, destPath?: string, globa
   const drive = await getDriveClient();
 
   let targetDest = destPath;
+  let mimeType: string | undefined;
 
-  if (!targetDest) {
-    try {
-      const meta = await drive.files.get({ fileId, fields: 'name' });
-      if (meta.data.name) {
-        targetDest = meta.data.name;
-      }
-    } catch {
-      // Fallback
-    }
-  } else if (targetDest.endsWith('/') || (existsSync(targetDest) && statSync(targetDest).isDirectory())) {
-    try {
-      const meta = await drive.files.get({ fileId, fields: 'name' });
+  try {
+    const meta = await drive.files.get({ fileId, fields: 'name, mimeType' });
+    mimeType = meta.data.mimeType || undefined;
+    if (!targetDest) {
+      if (meta.data.name) targetDest = meta.data.name;
+    } else if (targetDest.endsWith('/') || (existsSync(targetDest) && statSync(targetDest).isDirectory())) {
       const originalName = meta.data.name || 'downloaded_file';
       targetDest = join(targetDest, originalName);
-    } catch {
-      targetDest = join(targetDest, 'downloaded_file');
     }
+  } catch {
+    // Fallback
   }
 
   if (!targetDest) {
     targetDest = 'downloaded_file';
+  }
+
+  const googleAppsExportMap: Record<string, { mime: string; ext: string }> = {
+    'application/vnd.google-apps.document': { mime: 'application/pdf', ext: '.pdf' },
+    'application/vnd.google-apps.spreadsheet': { mime: 'application/pdf', ext: '.pdf' },
+    'application/vnd.google-apps.presentation': { mime: 'application/pdf', ext: '.pdf' },
+    'application/vnd.google-apps.drawing': { mime: 'application/pdf', ext: '.pdf' }
+  };
+
+  if (mimeType && googleAppsExportMap[mimeType]) {
+    const exportInfo = googleAppsExportMap[mimeType]!;
+    if (!targetDest.endsWith(exportInfo.ext)) {
+      targetDest += exportInfo.ext;
+    }
+    const res = await drive.files.export(
+      { fileId, mimeType: exportInfo.mime },
+      { responseType: 'stream' }
+    );
+    await pipeline(res.data, createWriteStream(targetDest));
+    return targetDest;
   }
 
   const res = await drive.files.get(
