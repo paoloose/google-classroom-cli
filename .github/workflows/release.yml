@@ -219,20 +219,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          # registry-url makes setup-node write .npmrc with
+          # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+          # Combined with id-token: write + --provenance, this gives us:
+          #   - auth via NPM_TOKEN (with 2FA bypass, no OTP needed)
+          #   - provenance signing via GitHub OIDC
           registry-url: 'https://registry.npmjs.org/'
-
-      - name: Configure OIDC auth (strip empty token from .npmrc)
-        run: |
-          # setup-node writes "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}"
-          # to .npmrc. Since we don't set NODE_AUTH_TOKEN (we're using OIDC
-          # trusted publishing, not a token), the token resolves to empty.
-          # npm then sends an empty auth header → 404.
-          # Fix: rewrite .npmrc with just the registry URL, no authToken.
-          # npm publish --provenance will then use the GitHub OIDC token
-          # for auth via npm's trusted publishing flow.
-          NPMRC="$(npm config get userconfig)"
-          echo "registry=https://registry.npmjs.org/" > "$NPMRC"
-          cat "$NPMRC"
 
       - name: Build npm packages (meta + 5 platform)
         env:
@@ -430,9 +422,16 @@ jobs:
             cd ..
           done
 
-      - name: Publish to npm (Trusted Publishing / OIDC)
+      - name: Publish to npm
+        env:
+          # NPM_TOKEN: granular access token with 2FA bypass + publish scope
+          # for @paoloose/*. setup-node's registry-url already wrote it to
+          # .npmrc as //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}.
+          # --provenance uses the id-token: write permission for OIDC signing.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          npm whoami --registry=https://registry.npmjs.org/
           targets=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64)
           for t in "${targets[@]}"; do
             echo "==> publishing @paoloose/google-classroom-cli-${t}"
