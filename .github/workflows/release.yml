@@ -219,6 +219,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          # registry-url: triggers setup-node's automatic OIDC token exchange with
+          # the npm registry. Combined with `permissions: id-token: write` on the
+          # job, this is what makes `npm publish` authenticate via Trusted
+          # Publishing instead of needing an NPM_TOKEN secret.
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Build npm packages (meta + 5 platform)
         env:
