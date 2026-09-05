@@ -322,8 +322,12 @@ jobs:
           chmod +x npm-meta/bin/classroom.js
 
           # Pick any platform's version marker — they're all the same (set from the tag).
-          cp "dist/classroom-cli-linux-x64/.classroom-cli-version" "npm-meta/.classroom-cli-version" 2>/dev/null || \
-            cp "dist/classroom-cli-linux-x64/.classroom-cli-version" "npm-meta/.classroom-cli-version"
+          # The .classroom-cli-version lives INSIDE the per-target tarball, not alongside
+          # it. Extract it from one of the tarballs first.
+          mkdir -p _peek
+          tar -xzf "dist/classroom-cli-linux-x64/classroom-cli_linux-x64.tar.gz" -C _peek
+          cp "_peek/.classroom-cli-version" "npm-meta/.classroom-cli-version"
+          rm -rf _peek
 
           # Meta package's package.json with optionalDependencies for each platform.
           cat >npm-meta/package.json <<EOF
