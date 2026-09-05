@@ -298,26 +298,20 @@ export async function executeWebPostPrivateComment(
     note(`Locating private comments input...`, globals);
     
     const inputFound = await page.evaluate(async () => {
-      for (let attempt = 0; attempt < 20; attempt++) {
-        let card = document.querySelector('div.PeGHgb.jbH5ac') as HTMLElement | null;
-        if (!card) {
-          const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
-          const heading = all.find(el => {
-            const t = el.innerText?.trim().toLowerCase() || '';
-            return /^\d+\s+private comments?$/i.test(t) || t === 'private comments' || /^\d+\s+comentarios?\s+privados?$/i.test(t) || t === 'comentarios privados';
-          });
-          if (heading) {
-            let p: HTMLElement | null = heading.parentElement;
-            while (p && p !== document.body) {
-              if (!p.innerText.includes('Your work') && !p.innerText.includes('Class comments') && p.children.length > 1) {
-                card = p;
-                break;
-              }
-              p = p.parentElement;
-            }
-          }
-        }
+      function getPrivateCommentsCard(): HTMLElement | null {
+        const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+        const candidates = all.filter(el => {
+          const t = el.innerText || '';
+          const hasHeader = /private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t);
+          const hasNotYourWork = !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+          return hasHeader && hasNotYourWork;
+        });
+        candidates.sort((a, b) => b.innerText.length - a.innerText.length);
+        return candidates[0] || null;
+      }
 
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const card = getPrivateCommentsCard();
         const root = card || document.body;
 
         const inputs = Array.from(root.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]')) as HTMLElement[];
@@ -325,7 +319,7 @@ export async function executeWebPostPrivateComment(
           const placeholder = el.getAttribute('placeholder') || '';
           const aria = el.getAttribute('aria-label') || '';
           return /private comment|comentario privado|add comment to/i.test(placeholder) || /private comment|comentario privado|add comment to/i.test(aria);
-        }) || inputs[0];
+        }) || (card ? inputs[0] : null);
 
         if (privateInput) {
           privateInput.focus();
@@ -379,7 +373,14 @@ export async function executeWebPostPrivateComment(
     note(`Looking for Post button...`, globals);
     const posted = await page.evaluate(async () => {
       for (let attempt = 0; attempt < 20; attempt++) {
-        const card = document.querySelector('div.PeGHgb.jbH5ac') || document.body;
+        const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+        const candidates = all.filter(el => {
+          const t = el.innerText || '';
+          return (/private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t)) && !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+        });
+        candidates.sort((a, b) => b.innerText.length - a.innerText.length);
+        const card = candidates[0] || document.body;
+
         const buttons = Array.from(card.querySelectorAll('button, div[role="button"]')) as HTMLElement[];
         const postBtn = buttons.find(b => {
           const aria = b.getAttribute('aria-label') || '';
@@ -441,48 +442,48 @@ export async function executeWebListPrivateComments(
     await new Promise(r => setTimeout(r, 2500));
 
     const comments = await page.evaluate(() => {
-      // 1. Locate the private comments card
-      let card = document.querySelector('div.PeGHgb.jbH5ac') as HTMLElement | null;
-      if (!card) {
-        const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
-        const heading = all.find(el => {
-          const t = el.innerText?.trim().toLowerCase() || '';
-          return /^\d+\s+private comments?$/i.test(t) || t === 'private comments' || /^\d+\s+comentarios?\s+privados?$/i.test(t) || t === 'comentarios privados';
-        });
-        if (heading) {
-          let p: HTMLElement | null = heading.parentElement;
-          while (p && p !== document.body) {
-            if (!p.innerText.includes('Your work') && !p.innerText.includes('Class comments') && p.children.length > 1) {
-              card = p;
-              break;
-            }
-            p = p.parentElement;
-          }
-        }
-      }
+      // 1. Locate the private comments card semantically (zero hardcoded minified classes)
+      const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+      const candidates = all.filter(el => {
+        const t = el.innerText || '';
+        const hasHeader = /private comments?|\d+\s+private comments?|comentarios?\s+privados?|add comment to/i.test(t);
+        const hasNotYourWork = !/Your work|Tu trabajo|Class comments|Comentarios de la clase/i.test(t);
+        return hasHeader && hasNotYourWork;
+      });
 
+      candidates.sort((a, b) => b.innerText.length - a.innerText.length);
+      const card = candidates[0];
       if (!card) return [];
 
-      const rawText = card.innerText || '';
-      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+      // 2. Extract author and timestamp nodes (e.g. "Name • Date" or "Name · Date")
+      const allChildren = Array.from(card.querySelectorAll('*')) as HTMLElement[];
+      const authorNodes = allChildren.filter(el => {
+        const t = el.textContent?.trim() || '';
+        return (t.includes(' • ') || t.includes(' · ')) && el.children.length <= 2 && t.length < 80;
+      });
 
-      const ignored = /^(private comments?|\d+\s+private comments?|no private comments?|comentarios?\s+privados?|\d+\s+comentarios?\s+privados?|more_vert|more options|delete|eliminar|add private comment.*|add comment to .*|añadir un comentario privado.*|añadir comentario a .*|post|publicar|cancel|cancelar|private comments are only visible.*|los comentarios privados solo son visibles.*)$/i;
+      const parsedComments: { author?: string; time?: string; text: string }[] = [];
 
-      const validLines = lines.filter(l => !ignored.test(l));
+      for (const aNode of authorNodes) {
+        const aText = aNode.textContent?.trim() || '';
+        const parts = aText.split(/[•·]/).map(p => p.trim());
+        const author = parts[0];
+        const time = parts[1];
 
-      const parsedComments: { author?: string; text: string; time?: string }[] = [];
-      
-      for (let i = 0; i < validLines.length; i++) {
-        const line = validLines[i];
-        if (line.includes('•') || line.includes('·')) {
-          const parts = line.split(/[•·]/).map(p => p.trim());
-          const author = parts[0];
-          const time = parts[1];
-          const text = validLines[i + 1] || '';
-          parsedComments.push({ author, time, text });
-          i++;
-        } else {
-          parsedComments.push({ text: line });
+        // The comment body resides in the sibling or adjacent container
+        let bodyText = '';
+        let curr: HTMLElement | null = aNode.parentElement;
+        for (let depth = 0; depth < 5 && curr && curr !== card; depth++) {
+          const next = curr.nextElementSibling as HTMLElement;
+          if (next && next.innerText && !/add private comment|post|private comments are only visible/i.test(next.innerText)) {
+            bodyText = next.innerText.trim();
+            break;
+          }
+          curr = curr.parentElement;
+        }
+
+        if (author && bodyText) {
+          parsedComments.push({ author, time, text: bodyText });
         }
       }
 
