@@ -299,20 +299,37 @@ export async function executeWebPostPrivateComment(
     
     const inputFound = await page.evaluate(async () => {
       for (let attempt = 0; attempt < 20; attempt++) {
-        const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span, section'));
-        const privateHeading = headings.find(el => /private comments/i.test(el.innerText?.trim() || ''));
-        
-        let container: HTMLElement | null = privateHeading ? (privateHeading.closest('section, div[role="region"], div') as HTMLElement) : null;
-        if (!container) container = document.body;
+        // Find leaf element with "Private comments"
+        const allEls = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+        const heading = allEls.find(el => {
+          const t = el.textContent?.trim().toLowerCase();
+          return (t === 'private comments' || t === 'comentarios privados') && el.children.length === 0;
+        }) || allEls.find(el => {
+          const t = el.innerText?.trim().toLowerCase();
+          return t === 'private comments' || t === 'comentarios privados';
+        });
 
-        const inputs = Array.from(document.querySelectorAll('textarea, input, [contenteditable="true"]')) as HTMLElement[];
+        let container: HTMLElement | null = null;
+        if (heading) {
+          let curr: HTMLElement | null = heading.parentElement;
+          while (curr && curr !== document.body) {
+            const text = curr.innerText || '';
+            if (/Your work|Tu trabajo|Class comments|Comentarios de la clase|Assigned|Asignada|Turn in|Entregar/i.test(text)) {
+              break;
+            }
+            container = curr;
+            curr = curr.parentElement;
+          }
+        }
+
+        const root = container || document.body;
+
+        const inputs = Array.from(root.querySelectorAll('textarea, input, [contenteditable="true"]')) as HTMLElement[];
         const privateInput = inputs.find(el => {
           const placeholder = el.getAttribute('placeholder') || '';
           const aria = el.getAttribute('aria-label') || '';
-          return /private comment/i.test(placeholder) || /private comment/i.test(aria) || /comentario privado/i.test(placeholder);
-        }) || inputs.find(el => {
-          return el.closest('div, section')?.innerText?.includes('Private comments');
-        });
+          return /private comment|comentario privado/i.test(placeholder) || /private comment|comentario privado/i.test(aria);
+        }) || inputs[0];
 
         if (privateInput) {
           privateInput.focus();
@@ -320,11 +337,11 @@ export async function executeWebPostPrivateComment(
           return true;
         }
 
-        const clickablePlaceholders = Array.from(document.querySelectorAll('div, span, button')) as HTMLElement[];
+        const clickablePlaceholders = Array.from(root.querySelectorAll('div, span, button')) as HTMLElement[];
         const placeholderEl = clickablePlaceholders.find(el => {
           const t = el.innerText?.trim() || '';
           const a = el.getAttribute('aria-label') || '';
-          return (t === 'Add private comment...' || t === 'Add private comment' || /Add private comment/i.test(a)) && !el.querySelector('textarea, input');
+          return (/Add private comment|Añadir un comentario privado/i.test(t) || /Add private comment|Añadir un comentario privado/i.test(a)) && !el.querySelector('textarea, input');
         });
 
         if (placeholderEl) {
@@ -426,37 +443,58 @@ export async function executeWebListPrivateComments(
     await new Promise(r => setTimeout(r, 2500));
 
     const comments = await page.evaluate(() => {
-      const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span, section'));
-      const privateHeading = headings.find(el => /private comments/i.test(el.innerText?.trim() || ''));
-      
+      // Find the isolated Private comments card
+      const allEls = Array.from(document.querySelectorAll('*')) as HTMLElement[];
+      const heading = allEls.find(el => {
+        const t = el.textContent?.trim().toLowerCase();
+        return (t === 'private comments' || t === 'comentarios privados') && el.children.length === 0;
+      }) || allEls.find(el => {
+        const t = el.innerText?.trim().toLowerCase();
+        return t === 'private comments' || t === 'comentarios privados';
+      });
+
+      if (!heading) return [];
+
       let container: HTMLElement | null = null;
-      if (privateHeading) {
-        let p: HTMLElement | null = privateHeading.parentElement;
-        for (let i = 0; i < 5 && p; i++) {
-          if (p.querySelector('[role="list"], [role="listitem"], ul, ol, li') || p.childElementCount > 2) {
-            container = p;
-            break;
-          }
-          p = p.parentElement;
+      let curr: HTMLElement | null = heading.parentElement;
+      while (curr && curr !== document.body) {
+        const text = curr.innerText || '';
+        if (/Your work|Tu trabajo|Class comments|Comentarios de la clase|Assigned|Asignada|Turn in|Entregar/i.test(text)) {
+          break;
         }
+        container = curr;
+        curr = curr.parentElement;
       }
 
-      const searchRoot = container || document.body;
-      const listItems = Array.from(searchRoot.querySelectorAll('[role="listitem"], li, div[data-comment-id]'));
+      if (!container) return [];
+
+      // Find comment items strictly within this card
+      const listItems = Array.from(container.querySelectorAll('[role="listitem"], div[data-comment-id], div[role="article"]')) as HTMLElement[];
       
       const parsedComments: { author?: string; text: string; time?: string }[] = [];
+      const ignorePatterns = /^(private comments|comentarios privados|add private comment|añadir un comentario privado|post|publicar|cancel|cancelar)$/i;
+      const menuNoise = /^(google drive|link|file|docs|slides|sheets|drawings|vids|more options|delete|eliminar)$/i;
+      const materialIcons = /^(more_vert|more_horiz|expand_more|expand_less|close|arrow_drop_down|send|delete|edit|reply|person|account_circle|arrow_forward)$/i;
 
       for (const item of listItems) {
-        const fullText = (item as HTMLElement).innerText?.trim() || '';
-        if (!fullText || /Add private comment/i.test(fullText)) continue;
+        const fullText = item.innerText?.trim() || '';
+        if (!fullText || /Add private comment|Añadir un comentario privado/i.test(fullText)) continue;
         
-        const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+        const lines = fullText
+          .split('\n')
+          .map(l => l.trim())
+          .filter(l => Boolean(l) && !ignorePatterns.test(l) && !menuNoise.test(l) && !materialIcons.test(l));
+        
+        if (lines.length === 0) continue;
+
         if (lines.length >= 2) {
           const author = lines[0];
           const time = lines.length > 2 ? lines[1] : undefined;
           const text = lines.slice(lines.length > 2 ? 2 : 1).join('\n');
-          parsedComments.push({ author, time, text });
-        } else if (lines.length === 1) {
+          if (text.trim() && !materialIcons.test(text.trim())) {
+            parsedComments.push({ author, time, text });
+          }
+        } else if (lines.length === 1 && lines[0].trim().length > 1 && !materialIcons.test(lines[0].trim())) {
           parsedComments.push({ text: lines[0] });
         }
       }
