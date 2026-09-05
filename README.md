@@ -4,9 +4,31 @@ A powerful, agent-first CLI for interacting with Google Classroom from your term
 
 ## Installation
 
-### One-line installer
+### npm (recommended)
 
-A bash installer ships with every release. By default it pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
+```bash
+npm install -g @paoloose/google-classroom-cli
+```
+
+That's it. npm automatically downloads only the prebuilt binary for your platform (Linux, macOS, or Windows) — no Bun or Node runtime required beyond npm itself. The `classroom` command will be on your `PATH` immediately.
+
+Supported platforms:
+
+| OS       | Architecture |   |
+| -------- | ------------ | - |
+| Linux    | x64, arm64   | ✓ |
+| macOS    | x64, arm64   | ✓ |
+| Windows  | x64          | ✓ |
+
+To update:
+
+```bash
+npm update -g @paoloose/google-classroom-cli
+```
+
+### One-line installer (alternative)
+
+A bash installer also ships with every release. It pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
 
 macOS / Linux / WSL / Git Bash:
 
