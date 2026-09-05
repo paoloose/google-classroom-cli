@@ -1,15 +1,19 @@
 {
-  "name": "google-classroom-cli",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@paoloose/google-classroom-cli",
+  "version": "1.0.1",
+  "description": "Agent-first CLI for Google Classroom",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
+  "files": [
+    "dist",
+    ".classroom-cli-version",
+    "README.md"
+  ],
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.4.1",
@@ -26,8 +30,5 @@
     "date-fns": "^4.4.0",
     "googleapis": "^178.0.0",
     "picocolors": "^1.1.1"
-  },
-  "bin": {
-    "classroom": "src/cli.ts"
   }
 }

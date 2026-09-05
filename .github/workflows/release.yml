@@ -55,7 +55,12 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          # Pin to a version whose cross-target tarballs are published on npm.
+          # `latest` resolves to the latest Bun release, but cross-target
+          # tarballs for the new version land on npm a few minutes after the
+          # GitHub release, which can cause a race where the release tag
+          # bundles but cross-compiles fail with "not available for download".
+          bun-version: 1.4.1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -193,3 +198,113 @@ jobs:
             dist/classroom-cli-source/*.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    name: publish npm (@paoloose/google-classroom-cli)
+    needs: [build, source-tarball]
+    runs-on: ubuntu-latest
+    # Skip npm publish for prereleases; the GitHub Release is enough for those.
+    # Remove this `if` to publish every tag including betas/rcs.
+    if: ${{ !contains(github.ref, '-') }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build npm package
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Map the GitHub Actions runner to the target name used by the build matrix.
+          # GitHub's runner arch strings are amd64/arm64; the build matrix uses x64/arm64.
+          arch="$(uname -m)"
+          case "$arch" in
+            x86_64)  matrix_arch="x64" ;;
+            aarch64) matrix_arch="arm64" ;;
+            *) echo "Unsupported runner arch: $arch" >&2; exit 1 ;;
+          esac
+          target="linux-${matrix_arch}"
+          tarball="dist/classroom-cli-${target}/classroom-cli_${target}.tar.gz"
+
+          if [[ ! -f "$tarball" ]]; then
+            echo "Expected tarball not found: $tarball" >&2
+            ls -R dist || true
+            exit 1
+          fi
+
+          rm -rf npm-pkg
+          mkdir -p npm-pkg
+          tar -xzf "$tarball" -C npm-pkg
+          # The build step lays out `dist/classroom[.exe]` and `.classroom-cli-version`.
+          ls -la npm-pkg/dist
+
+          # Strip the leading `v` from the tag to get the package version.
+          version="${REF_NAME#v}"
+          # npm forbids leading zeros in numeric segments, but Git tag semver is fine.
+          # Sanity-check the version shape.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Refusing to publish: tag '$REF_NAME' is not semver" >&2
+            exit 1
+          fi
+
+          cat >npm-pkg/package.json <<EOF
+          {
+            "name": "@paoloose/google-classroom-cli",
+            "version": "${version}",
+            "description": "Agent-first CLI for Google Classroom",
+            "license": "ISC",
+            "type": "module",
+            "bin": {
+              "classroom": "./dist/classroom"
+            },
+            "files": [
+              "dist",
+              ".classroom-cli-version"
+            ],
+            "engines": {
+              "node": ">=18"
+            },
+            "publishConfig": {
+              "provenance": true
+            }
+          }
+          EOF
+
+          # README for the npm registry listing (falls back to a stub if the repo
+          # doesn't carry one at the package root).
+          if [[ -f README.md ]]; then
+            cp README.md npm-pkg/README.md
+          fi
+
+          cd npm-pkg
+          # Sanity: the bin entry has to point at a file we ship.
+          test -x dist/classroom || { echo "dist/classroom not executable" >&2; exit 1; }
+          npm pack --dry-run
+          echo "✔ npm package staged for $target as version $version"
+
+      - name: Publish to npm (Trusted Publishing / OIDC)
+        run: |
+          set -euo pipefail
+          # Trusted publishing via OIDC: npm picks up the workflow's id-token
+          # (granted by `permissions: id-token: write` above) and verifies it
+          # against the trusted-publisher config on the package page at
+          # npmjs.com. No NPM_TOKEN secret is required.
+          cd npm-pkg
+          npm publish --provenance --access public
+        # If npm Trusted Publishing isn't configured for this package yet,
+        # temporarily uncomment the fallback below and set the NPM_TOKEN
+        # repository secret. The OIDC path above is preferred.
+        #
+        #   run: NPM_CONFIG_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+        #   env:
+        #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
