@@ -5,42 +5,18 @@ import { getClient } from '../client.js';
 import pc from 'picocolors';
 import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 import { getActiveCourse, resolveCourseId } from '../context.js';
-import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
+import { promptForCourse, promptForCourseWork } from '../prompts.js';
+import { parseClassroomUrl, decodeClassroomIdentifier, resolveCommandTarget } from '../url-utils.js';
 
 export async function handleComments(verb: string | undefined, globals: GlobalFlags, argv: any) {
   if (verb === 'list') {
     let courseId: string | undefined;
     let courseWorkId: string | undefined;
 
-    if (argv._[3]) {
-      courseId = resolveCourseId(argv._[2]);
-      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
-    } else if (argv._[2]) {
-      const parsed = parseClassroomUrl(argv._[2]);
-      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
-        courseId = parsed.courseId;
-        courseWorkId = parsed.courseWorkId || parsed.resourceId;
-      } else if (parsed.courseId && !parsed.courseWorkId && !parsed.resourceId) {
-        courseId = parsed.courseId;
-        courseWorkId = undefined;
-      } else {
-        const active = getActiveCourse();
-        if (active?.id) {
-          courseId = active.id;
-          courseWorkId = parsed.courseWorkId || decodeClassroomIdentifier(argv._[2]);
-        } else {
-          const decoded = decodeClassroomIdentifier(argv._[2]) || argv._[2];
-          const classroom = await getClient();
-          try {
-            await classroom.courses.get({ id: decoded });
-            courseId = decoded;
-            courseWorkId = undefined;
-          } catch {
-            courseWorkId = decoded;
-          }
-        }
-      }
-    } else {
+    const resolved = resolveCommandTarget(argv._[2], argv._[3], 'work');
+    courseId = resolved.courseId;
+    courseWorkId = resolved.resourceId;
+    if (!courseId) {
       const active = getActiveCourse();
       if (active?.id) {
         courseId = active.id;
@@ -68,26 +44,14 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
           console.log(pc.yellow('No active courses found to select.'));
           return;
         }
-        const { select, isCancel, cancel } = await import('@clack/prompts');
-        const courseOptions = courses.map((c: any) => ({
-          value: c.id!,
-          label: `${c.name}${c.section ? ` · ${c.section}` : ''}`,
-          hint: `ID: ${c.id}`
-        }));
-        const chosenCourseId = await select({
-          message: `Select a course to view ${isClassComment ? 'class' : 'private'} comments:`,
-          options: courseOptions
-        });
-        if (isCancel(chosenCourseId)) {
-          cancel('Action cancelled.');
-          return;
-        }
-        courseId = chosenCourseId as string;
+        const chosenCourseId = await promptForCourse(courses, `Select a course to view ${isClassComment ? 'class' : 'private'} comments:`);
+    if (!chosenCourseId) return;
+    courseId = chosenCourseId;
       }
 
       note(`Fetching assignments for course ${courseId}...`, globals);
       const cwListRes = await classroom.courses.courseWork.list({
-        courseId,
+        courseId: courseId!,
         courseWorkStates: ['PUBLISHED']
       });
       const works = cwListRes.data.courseWork || [];
@@ -96,31 +60,9 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
         return;
       }
 
-      const { select, isCancel, cancel } = await import('@clack/prompts');
-      const taskOptions = works.map((w: any) => {
-        let hint = `ID: ${w.id}`;
-        if (w.dueDate) {
-          const tDate = parseDueDate(w);
-          const timeLeft = formatTimeLeft(tDate, new Date());
-          hint += ` · Due: ${timeLeft}`;
-        }
-        return {
-          value: w.id!,
-          label: w.title || 'Untitled Assignment',
-          hint
-        };
-      });
-
-      const chosenTaskId = await select({
-        message: `Select an assignment to view ${isClassComment ? 'class' : 'private'} comments:`,
-        options: taskOptions
-      });
-
-      if (isCancel(chosenTaskId)) {
-        cancel('Action cancelled.');
-        return;
-      }
-      courseWorkId = chosenTaskId as string;
+      const chosenTaskId = await promptForCourseWork(works, `Select an assignment to view ${isClassComment ? 'class' : 'private'} comments:`);
+    if (!chosenTaskId) return;
+    courseWorkId = chosenTaskId;
     }
 
     if (!courseId) {
@@ -139,40 +81,15 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     }
 
     const { executeWebListPrivateComments } = await import('../web-engine.js');
-    await executeWebListPrivateComments(activeProfile, courseId, courseWorkId, globals, isClassComment);
+    await executeWebListPrivateComments(activeProfile, courseId!, courseWorkId!, globals, isClassComment);
   } else if (verb === 'post' || verb === 'add' || verb === 'create') {
     let courseId: string | undefined;
     let courseWorkId: string | undefined;
 
-    if (argv._[3]) {
-      courseId = resolveCourseId(argv._[2]);
-      courseWorkId = decodeClassroomIdentifier(argv._[3]) || argv._[3];
-    } else if (argv._[2]) {
-      const parsed = parseClassroomUrl(argv._[2]);
-      if (parsed.courseId && (parsed.courseWorkId || parsed.resourceId)) {
-        courseId = parsed.courseId;
-        courseWorkId = parsed.courseWorkId || parsed.resourceId;
-      } else if (parsed.courseId && !parsed.courseWorkId && !parsed.resourceId) {
-        courseId = parsed.courseId;
-        courseWorkId = undefined;
-      } else {
-        const active = getActiveCourse();
-        if (active?.id) {
-          courseId = active.id;
-          courseWorkId = parsed.courseWorkId || decodeClassroomIdentifier(argv._[2]);
-        } else {
-          const decoded = decodeClassroomIdentifier(argv._[2]) || argv._[2];
-          const classroom = await getClient();
-          try {
-            await classroom.courses.get({ id: decoded });
-            courseId = decoded;
-            courseWorkId = undefined;
-          } catch {
-            courseWorkId = decoded;
-          }
-        }
-      }
-    } else {
+    const resolved = resolveCommandTarget(argv._[2], argv._[3], 'work');
+    courseId = resolved.courseId;
+    courseWorkId = resolved.resourceId;
+    if (!courseId) {
       const active = getActiveCourse();
       if (active?.id) {
         courseId = active.id;
@@ -200,26 +117,14 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
           console.log(pc.yellow('No active courses found to select.'));
           return;
         }
-        const { select, isCancel, cancel } = await import('@clack/prompts');
-        const courseOptions = courses.map((c: any) => ({
-          value: c.id!,
-          label: `${c.name}${c.section ? ` · ${c.section}` : ''}`,
-          hint: `ID: ${c.id}`
-        }));
-        const chosenCourseId = await select({
-          message: `Select a course for ${isClassComment ? 'class' : 'private'} comment:`,
-          options: courseOptions
-        });
-        if (isCancel(chosenCourseId)) {
-          cancel('Action cancelled.');
-          return;
-        }
-        courseId = chosenCourseId as string;
+        const chosenCourseId = await promptForCourse(courses, `Select a course for ${isClassComment ? 'class' : 'private'} comment:`);
+    if (!chosenCourseId) return;
+    courseId = chosenCourseId;
       }
 
       note(`Fetching assignments for course ${courseId}...`, globals);
       const cwListRes = await classroom.courses.courseWork.list({
-        courseId,
+        courseId: courseId!,
         courseWorkStates: ['PUBLISHED']
       });
       const works = cwListRes.data.courseWork || [];
@@ -228,31 +133,9 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
         return;
       }
 
-      const { select, isCancel, cancel } = await import('@clack/prompts');
-      const taskOptions = works.map((w: any) => {
-        let hint = `ID: ${w.id}`;
-        if (w.dueDate) {
-          const tDate = parseDueDate(w);
-          const timeLeft = formatTimeLeft(tDate, new Date());
-          hint += ` · Due: ${timeLeft}`;
-        }
-        return {
-          value: w.id!,
-          label: w.title || 'Untitled Assignment',
-          hint
-        };
-      });
-
-      const chosenTaskId = await select({
-        message: `Select an assignment to post ${isClassComment ? 'class' : 'private'} comment:`,
-        options: taskOptions
-      });
-
-      if (isCancel(chosenTaskId)) {
-        cancel('Action cancelled.');
-        return;
-      }
-      courseWorkId = chosenTaskId as string;
+      const chosenTaskId = await promptForCourseWork(works, `Select an assignment to post ${isClassComment ? 'class' : 'private'} comment:`);
+    if (!chosenTaskId) return;
+    courseWorkId = chosenTaskId;
     }
 
     if (!courseId) {
@@ -297,7 +180,7 @@ export async function handleComments(verb: string | undefined, globals: GlobalFl
     }
 
     const { executeWebPostPrivateComment } = await import('../web-engine.js');
-    await executeWebPostPrivateComment(activeProfile, courseId, courseWorkId, commentText, globals, isClassComment);
+    await executeWebPostPrivateComment(activeProfile, courseId!, courseWorkId!, commentText, globals, isClassComment);
   } else {
     throw new AppError('UNKNOWN_COMMAND', {
       name: 'UnknownCommand',

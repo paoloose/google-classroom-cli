@@ -7,7 +7,12 @@ import { emit, reportError, note } from '../cli/agent/json-mode.js';
 import { handleAuth } from './commands/auth.js';
 import { handleCourse } from './commands/courses.js';
 import { handleRoster } from './commands/rosters.js';
-import { handleCourseWork, handleTopic, handleMaterial, handleSubmissions, handleStudentAction, handleTasksPending, handleTasksDueSoon } from './commands/coursework.js';
+import { handleCourseWork } from './commands/work.js';
+import { handleTopic } from './commands/topics.js';
+import { handleMaterial } from './commands/materials.js';
+import { handleSubmissions } from './commands/submissions.js';
+import { handleStudentAction } from './commands/student.js';
+import { handleTasksPending, handleTasksDueSoon } from './commands/tasks.js';
 import { handleStream } from './commands/stream.js';
 import { handleGuardians } from './commands/guardians.js';
 import { handleProfile } from './commands/profiles.js';
@@ -131,7 +136,11 @@ async function main() {
     process.exit(0);
   }
 
-  const noun = argv._[0];
+  let noun = argv._[0];
+  if (noun === 'materials') noun = 'material';
+  if (noun === 'assignments') noun = 'work';
+  if (noun === 'topics') noun = 'topic';
+  if (noun === 'submission') noun = 'submissions';
   const verb = argv._[1];
 
   try {

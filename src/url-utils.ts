@@ -101,7 +101,7 @@ export function parseClassroomUrl(input?: string): ParsedClassroomReference {
   };
 }
 
-export function resolveResourceIds(
+export function resolveCommandTarget(
   arg1?: string,
   arg2?: string,
   preferredType?: 'work' | 'material' | 'announcement' | 'topic'
