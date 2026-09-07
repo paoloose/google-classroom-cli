@@ -4,19 +4,6 @@ import { parseGlobalFlags } from '../cli/foundation/global-flags.js';
 import { AppError } from '../cli/foundation/error-map.js';
 import { emit, reportError, note } from '../cli/agent/json-mode.js';
 
-import { handleAuth } from './commands/auth.js';
-import { handleCourse } from './commands/courses.js';
-import { handleRoster } from './commands/rosters.js';
-import { handleCourseWork } from './commands/work.js';
-import { handleTopic } from './commands/topics.js';
-import { handleMaterial } from './commands/materials.js';
-import { handleSubmissions } from './commands/submissions.js';
-import { handleStudentAction } from './commands/student.js';
-import { handleTasksPending, handleTasksDueSoon } from './commands/tasks.js';
-import { handleStream } from './commands/stream.js';
-import { handleGuardians } from './commands/guardians.js';
-import { handleProfile } from './commands/profiles.js';
-import { handleComments } from './commands/comments.js';
 import pc from 'picocolors';
 
 async function main() {
@@ -148,24 +135,24 @@ async function main() {
        emit({ version: "1.0" }, globals, (d) => console.log(JSON.stringify(d, null, 2)));
        return;
     }
-    if (noun === 'profile') return await handleProfile(verb, globals, argv);
-    if (noun === 'auth') return await handleAuth(verb, globals, argv);
-    if (noun === 'course') return await handleCourse(verb, globals, argv);
-    if (noun === 'roster') return await handleRoster(verb, globals, argv);
-    if (noun === 'stream') return await handleStream(verb, globals, argv);
-    if (noun === 'topic') return await handleTopic(verb, globals, argv);
-    if (noun === 'material') return await handleMaterial(verb, globals, argv);
-    if (noun === 'submissions') return await handleSubmissions(verb, globals, argv);
-    if (noun === 'guardian') return await handleGuardians(verb, globals, argv);
-    if (noun === 'comment' || noun === 'comments') return await handleComments(verb, globals, argv);
+    if (noun === 'profile') return await (await import('./commands/profiles.js')).handleProfile(verb, globals, argv);
+    if (noun === 'auth') return await (await import('./commands/auth.js')).handleAuth(verb, globals, argv);
+    if (noun === 'course') return await (await import('./commands/courses.js')).handleCourse(verb, globals, argv);
+    if (noun === 'roster') return await (await import('./commands/rosters.js')).handleRoster(verb, globals, argv);
+    if (noun === 'stream') return await (await import('./commands/stream.js')).handleStream(verb, globals, argv);
+    if (noun === 'topic') return await (await import('./commands/topics.js')).handleTopic(verb, globals, argv);
+    if (noun === 'material') return await (await import('./commands/materials.js')).handleMaterial(verb, globals, argv);
+    if (noun === 'submissions') return await (await import('./commands/submissions.js')).handleSubmissions(verb, globals, argv);
+    if (noun === 'guardian') return await (await import('./commands/guardians.js')).handleGuardians(verb, globals, argv);
+    if (noun === 'comment' || noun === 'comments') return await (await import('./commands/comments.js')).handleComments(verb, globals, argv);
     
     // Some are slightly renamed/grouped for CLI UX
-    if (noun === 'work') return await handleCourseWork(globals, { ...argv, _: ['work', argv._[1], argv._[2], argv._[3]] });
-    if (noun === 'enroll' || noun === 'join') return await handleCourse('enroll', globals, { ...argv, _: ['course', 'enroll', argv._[1], argv._[2]] });
-    if (noun === 'unenroll' || noun === 'leave') return await handleCourse('unenroll', globals, { ...argv, _: ['course', 'unenroll', argv._[1]] });
-    if (noun === 'submit') return await handleStudentAction('submit', globals, { ...argv, _: ['student', 'submit', argv._[1], argv._[2]]});
-    if (noun === 'turn-in') return await handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
-    if (noun === 'unsubmit') return await handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});
+    if (noun === 'work') return await (await import('./commands/work.js')).handleCourseWork(globals, { ...argv, _: ['work', argv._[1], argv._[2], argv._[3]] });
+    if (noun === 'enroll' || noun === 'join') return await (await import('./commands/courses.js')).handleCourse('enroll', globals, { ...argv, _: ['course', 'enroll', argv._[1], argv._[2]] });
+    if (noun === 'unenroll' || noun === 'leave') return await (await import('./commands/courses.js')).handleCourse('unenroll', globals, { ...argv, _: ['course', 'unenroll', argv._[1]] });
+    if (noun === 'submit') return await (await import('./commands/student.js')).handleStudentAction('submit', globals, { ...argv, _: ['student', 'submit', argv._[1], argv._[2]]});
+    if (noun === 'turn-in') return await (await import('./commands/student.js')).handleStudentAction('turn-in', globals, { ...argv, _: ['student', 'turn-in', argv._[1], argv._[2]]});
+    if (noun === 'unsubmit') return await (await import('./commands/student.js')).handleStudentAction('unsubmit', globals, { ...argv, _: ['student', 'unsubmit', argv._[1], argv._[2]]});
     
     if (noun === 'drive' && verb === 'download') {
       const fileId = argv._[2];
@@ -178,12 +165,12 @@ async function main() {
       return;
     }
 
-    if (noun === 'pending') return await handleTasksPending(globals, { ...argv, _: ['pending']});
-    if (noun === 'due-soon') return await handleTasksDueSoon(globals, { ...argv, _: ['due-soon']});
+    if (noun === 'pending') return await (await import('./commands/tasks.js')).handleTasksPending(globals, { ...argv, _: ['pending']});
+    if (noun === 'due-soon') return await (await import('./commands/tasks.js')).handleTasksDueSoon(globals, { ...argv, _: ['due-soon']});
     
     // Backwards compatibility
-    if (noun === 'course' && verb === 'stream') return await handleStream('list', globals, { ...argv, _: ['stream', 'list', argv._[2]]});
-    if (noun === 'course' && verb === 'work') return await handleCourseWork(globals, { ...argv, _: ['course', 'work', argv._[2]] });
+    if (noun === 'course' && verb === 'stream') return await (await import('./commands/stream.js')).handleStream('list', globals, { ...argv, _: ['stream', 'list', argv._[2]]});
+    if (noun === 'course' && verb === 'work') return await (await import('./commands/work.js')).handleCourseWork(globals, { ...argv, _: ['course', 'work', argv._[2]] });
 
     throw new AppError('UNKNOWN_COMMAND', { name: 'UnknownCommand', human: `Unknown command: ${noun || ''} ${verb || ''}`.trim() });
   } catch (error: any) {
