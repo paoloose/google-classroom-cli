@@ -200,7 +200,7 @@ export function resolveDateRange(
   // lastInput is defined here.
   const ms = parseDuration(lastInput!);
   const from = new Date(now.getTime() - ms);
-  return { from, to: now };
+  return { from };
 }
 
 /**

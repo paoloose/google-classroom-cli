@@ -33,15 +33,53 @@ export function getChromeExecutablePath(): string {
       `${programFilesX86}\\Google\\Chrome\\Application\\chrome.exe`,
       `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
       `${programFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
-      `${programFilesX86}\\Microsoft\\Edge\\Application\\msedge.exe`
+      `${programFilesX86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${programFiles}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+      `${localAppData}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`
     ];
     for (const p of winPaths) {
       if (existsSync(p)) return p;
     }
     return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  } else {
+    // Linux / POSIX systems
+    const linuxPaths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/brave-browser',
+      '/usr/bin/brave',
+      '/usr/bin/microsoft-edge-stable',
+      '/usr/bin/microsoft-edge',
+      '/snap/bin/chromium',
+      '/snap/bin/google-chrome',
+      '/var/lib/flatpak/exports/bin/com.google.Chrome',
+      `${process.env.HOME}/.local/share/flatpak/exports/bin/com.google.Chrome`
+    ];
+    for (const p of linuxPaths) {
+      if (existsSync(p)) return p;
+    }
+
+    const linuxBinaries = [
+      'google-chrome',
+      'google-chrome-stable',
+      'chromium',
+      'chromium-browser',
+      'brave-browser',
+      'brave',
+      'microsoft-edge-stable',
+      'microsoft-edge'
+    ];
+    for (const bin of linuxBinaries) {
+      try {
+        const resolved = execSync(`which ${bin} 2>/dev/null`, { encoding: 'utf-8' }).trim();
+        if (resolved && existsSync(resolved)) return resolved;
+      } catch {}
+    }
   }
 
-  return 'google-chrome';
+  return '/usr/bin/google-chrome';
 }
 
 export async function performWebLoginHandshake(profile: Profile, globals: GlobalFlags) {

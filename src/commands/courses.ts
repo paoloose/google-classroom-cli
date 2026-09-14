@@ -7,7 +7,7 @@ import pc from 'picocolors';
 
 import { printBlock, type BlockItem } from '../ui.js';
 import { extractDriveFileIds, fetchDriveFileSizes, formatAttachments } from '../attachments.js';
-import { parseDueDate } from '../date-utils.js';
+import { parseDueDate, formatTimeLeft } from '../date-utils.js';
 import { getActiveCourse, setActiveCourse, clearActiveCourse, resolveCourseId } from '../context.js';
 import { parseClassroomUrl, decodeClassroomIdentifier } from '../url-utils.js';
 
@@ -32,6 +32,15 @@ function getCourseBlock(c: any, full: boolean = false, isSelected: boolean = fal
 
   const title = isSelected ? `${c.name} ${pc.green('(Selected)')}` : c.name;
   return { title, id: c.id, details };
+}
+
+function formatDueDateStr(cw: any, now: Date = new Date()): string {
+  if (!cw.dueDate) return 'None';
+  const tDate = parseDueDate(cw);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const localDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth() + 1)}-${pad(tDate.getDate())} ${pad(tDate.getHours())}:${pad(tDate.getMinutes())}`;
+  const timeLeft = formatTimeLeft(tDate, now);
+  return `${localDateStr} (${timeLeft})`;
 }
 
 export async function handleCourse(verb: string | undefined, globals: GlobalFlags, argv: any) {
@@ -107,11 +116,19 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
         printBlock([courseBlock]);
         
         if (shouldFetchRelated) {
+          const now = new Date();
+
           if (data.topics.length > 0) {
             console.log(pc.green(`✔ Topics:`));
             printBlock(data.topics.map((t: any) => {
-              const item: BlockItem = { title: t.name, id: t.topicId };
-              if (isFull) item.details = [['Updated', t.updateTime]];
+              const item: BlockItem = {
+                title: t.name,
+                id: t.topicId,
+                details: [
+                  ...(t.updateTime ? [['Updated', t.updateTime] as [string, string]] : [])
+                ]
+              };
+              if (isFull && t.courseId) item.details!.push(['Course ID', t.courseId]);
               
               const topicAtts: string[] = [];
               data.coursework.filter((cw: any) => cw.topicId === t.topicId).forEach((cw: any) => {
@@ -131,17 +148,36 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
           if (data.coursework.length > 0) {
             console.log(pc.green(`✔ Assignments:`));
             printBlock(data.coursework.map((cw: any) => {
-              const item: BlockItem = { title: cw.title, id: cw.id };
-              const atts = formatAttachments(cw.materials, sizeMap);
-              if (atts) item.attachments = atts;
+              const stateColor = cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN');
+              const dueStr = formatDueDateStr(cw, now);
+
+              const item: BlockItem = {
+                title: cw.title,
+                id: cw.id,
+                details: [
+                  ['State', stateColor],
+                  ['Due', cw.dueDate ? pc.yellow(dueStr) : 'None'],
+                  ...(cw.maxPoints !== undefined ? [['Max Points', `${cw.maxPoints} pts`] as [string, string]] : []),
+                  ...(cw.alternateLink ? [['Link', pc.blue(pc.underline(cw.alternateLink))] as [string, string]] : [])
+                ]
+              };
               
               if (isFull) {
-                item.details = [
-                  ['State', cw.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(cw.state || 'UNKNOWN')],
-                  ['Due', cw.dueDate ? `${cw.dueDate.year}-${cw.dueDate.month}-${cw.dueDate.day}` : 'None']
-                ];
-                if (cw.alternateLink) item.details.push(['Link', pc.blue(pc.underline(cw.alternateLink))]);
+                if (cw.courseId) item.details!.push(['Course ID', cw.courseId]);
+                if (cw.workType) item.details!.push(['Type', cw.workType]);
+                if (cw.topicId) {
+                  const topicObj = data.topics.find((t: any) => t.topicId === cw.topicId);
+                  item.details!.push(['Topic', topicObj ? `${topicObj.name} (ID: ${cw.topicId})` : cw.topicId]);
+                }
+                if (cw.creatorUserId) item.details!.push(['Creator ID', cw.creatorUserId]);
+                if (cw.creationTime) item.details!.push(['Created', cw.creationTime]);
+                if (cw.updateTime) item.details!.push(['Updated', cw.updateTime]);
+                if (cw.scheduledTime) item.details!.push(['Scheduled', cw.scheduledTime]);
+                if (cw.description) item.details!.push(['Description', cw.description]);
               }
+
+              const atts = formatAttachments(cw.materials, sizeMap);
+              if (atts && atts.length > 0) item.attachments = atts;
               return item;
             }));
           }
@@ -149,14 +185,32 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
           if (data.materials.length > 0) {
             console.log(pc.green(`✔ Materials:`));
             printBlock(data.materials.map((m: any) => {
-              const item: BlockItem = { title: m.title, id: m.id };
-              const atts = formatAttachments(m.materials, sizeMap);
-              if (atts) item.attachments = atts;
+              const stateColor = m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN');
+              const item: BlockItem = {
+                title: m.title,
+                id: m.id,
+                details: [
+                  ['State', stateColor],
+                  ...(m.updateTime ? [['Updated', m.updateTime] as [string, string]] : []),
+                  ...(m.alternateLink ? [['Link', pc.blue(pc.underline(m.alternateLink))] as [string, string]] : []),
+                  ...(!isFull && m.description ? [['Description', m.description.length > 80 ? m.description.slice(0, 77) + '...' : m.description] as [string, string]] : [])
+                ]
+              };
               
               if (isFull) {
-                item.details = [['State', m.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(m.state || 'UNKNOWN')]];
-                if (m.alternateLink) item.details.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
+                if (m.courseId) item.details!.push(['Course ID', m.courseId]);
+                if (m.topicId) {
+                  const topicObj = data.topics.find((t: any) => t.topicId === m.topicId);
+                  item.details!.push(['Topic', topicObj ? `${topicObj.name} (ID: ${m.topicId})` : m.topicId]);
+                }
+                if (m.creatorUserId) item.details!.push(['Creator ID', m.creatorUserId]);
+                if (m.creationTime) item.details!.push(['Created', m.creationTime]);
+                if (m.scheduledTime) item.details!.push(['Scheduled', m.scheduledTime]);
+                if (m.description) item.details!.push(['Description', m.description]);
               }
+
+              const atts = formatAttachments(m.materials, sizeMap);
+              if (atts && atts.length > 0) item.attachments = atts;
               return item;
             }));
           }
@@ -164,14 +218,35 @@ export async function handleCourse(verb: string | undefined, globals: GlobalFlag
           if (data.stream.length > 0) {
             console.log(pc.green(`✔ Stream Announcements:`));
             printBlock(data.stream.map((a: any) => {
-              const item: BlockItem = { title: a.text.split('\n')[0].substring(0, 50) + (a.text.length > 50 ? '...' : ''), id: a.id };
-              const atts = formatAttachments(a.materials, sizeMap);
-              if (atts) item.attachments = atts;
+              const rawText = (a.text || '').trim();
+              const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+              const firstLine = lines[0] || 'Announcement';
+              const previewTitle = firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine;
+              const stateColor = a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN');
+
+              const item: BlockItem = {
+                title: isFull ? (firstLine.length > 60 ? firstLine : firstLine) : previewTitle,
+                id: a.id,
+                details: [
+                  ['State', stateColor],
+                  ['Posted', a.updateTime || a.creationTime || 'N/A'],
+                  ...(a.alternateLink ? [['Link', pc.blue(pc.underline(a.alternateLink))] as [string, string]] : [])
+                ]
+              };
               
               if (isFull) {
-                item.details = [['Posted', a.updateTime]];
-                if (a.alternateLink) item.details.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+                // Under --full, display the entire full announcement text!
+                item.details!.push(['Text', rawText]);
+                if (a.courseId) item.details!.push(['Course ID', a.courseId]);
+                if (a.creatorUserId) item.details!.push(['Creator ID', a.creatorUserId]);
+                if (a.creationTime && a.updateTime && a.creationTime !== a.updateTime) {
+                  item.details!.push(['Created', a.creationTime]);
+                }
+                if (a.scheduledTime) item.details!.push(['Scheduled', a.scheduledTime]);
               }
+
+              const atts = formatAttachments(a.materials, sizeMap);
+              if (atts && atts.length > 0) item.attachments = atts;
               return item;
             }));
           }

@@ -37,12 +37,31 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
       }
       
       printBlock(data.announcements.map((a: any) => {
+        const rawText = (a.text || '').trim();
+        const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+        const firstLine = lines[0] || 'Announcement';
+        const previewTitle = firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine;
+        const stateColor = a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN');
+
         const item: BlockItem = {
-          title: a.text,
+          title: isFull ? (firstLine.length > 60 ? firstLine : firstLine) : previewTitle,
           id: a.id,
-          details: [['Posted', a.updateTime]]
+          details: [
+            ['State', stateColor],
+            ['Posted', a.updateTime || a.creationTime || 'N/A'],
+            ...(a.alternateLink ? [['Link', pc.blue(pc.underline(a.alternateLink))] as [string, string]] : [])
+          ]
         };
-        if (isFull && a.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(a.alternateLink))]);
+
+        if (isFull) {
+          item.details!.push(['Text', rawText]);
+          if (a.courseId) item.details!.push(['Course ID', a.courseId]);
+          if (a.creatorUserId) item.details!.push(['Creator ID', a.creatorUserId]);
+          if (a.creationTime && a.updateTime && a.creationTime !== a.updateTime) {
+            item.details!.push(['Created', a.creationTime]);
+          }
+          if (a.scheduledTime) item.details!.push(['Scheduled', a.scheduledTime]);
+        }
         
         const atts = formatAttachments(a.materials, sizeMap);
         if (atts && atts.length > 0) item.attachments = atts;
@@ -82,9 +101,14 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
     
     emit({ announcement: enrichedAnnouncement }, globals, (data) => {
       console.log(pc.green(`\n✔ Announcement Details:`));
+      const rawText = (a.text || '').trim();
+      const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+      const firstLine = lines[0] || 'Announcement';
+
       const detailsList: [string, string][] = [
         ['State', a.state === 'PUBLISHED' ? pc.green('PUBLISHED') : pc.yellow(a.state || 'UNKNOWN')],
-        ['Posted', a.updateTime || a.creationTime || '']
+        ['Posted', a.updateTime || a.creationTime || 'N/A'],
+        ['Text', rawText]
       ];
       if (a.creationTime && a.updateTime && a.creationTime !== a.updateTime) {
         detailsList.push(['Created', a.creationTime]);
@@ -94,7 +118,7 @@ export async function handleStream(verb: string | undefined, globals: GlobalFlag
       }
       
       const item: BlockItem = {
-        title: a.text || 'Untitled Announcement',
+        title: firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine,
         id: a.id || undefined,
         details: detailsList
       };

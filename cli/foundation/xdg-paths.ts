@@ -15,10 +15,10 @@
 //   import { getAppPaths, ensureHome } from "./foundation/xdg-paths";
 //
 //   const paths = getAppPaths("myapp");
-//   // paths.config  = ~/.config/myapp      (Linux)
-//   // paths.state   = ~/.local/state/myapp  (Linux)
-//   // paths.cache   = ~/.cache/myapp        (Linux)
-//   // paths.home    = ~/.config/myapp       (Linux, alias for config)
+//   // paths.config   = ~/.config/myapp             (Linux/macOS)
+//   // paths.profiles = ~/.config/myapp/profiles    (Linux/macOS)
+//   // paths.sessions = ~/.config/myapp/sessions    (Linux/macOS)
+//   // paths.home     = ~/.config/myapp             (Linux/macOS)
 //
 //   ensureHome(paths);  // creates all directories
 
@@ -49,11 +49,10 @@ export type AppPaths = {
 /**
  * Resolves the canonical directory paths for your CLI app.
  *
- * On Linux: follows XDG Base Directory Spec.
- * On macOS: uses ~/Library/Application Support (config/state) and ~/Library/Caches.
- * On Windows: uses %APPDATA% (config) and %LOCALAPPDATA% (state/cache).
+ * All persistent configuration, profiles, and state are consolidated under
+ * ~/.config/<appName> (or %APPDATA%\<appName> on Windows).
  *
- * The APP_HOME env var (e.g., MYAPP_HOME) overrides everything, useful for
+ * The APP_HOME env var (e.g., CLASSROOM_CLI_HOME) overrides everything, useful for
  * testing and CI where you don't want to pollute the real home directory.
  */
 export function getAppPaths(appName: string): AppPaths {
@@ -69,46 +68,23 @@ export function getAppPaths(appName: string): AppPaths {
 
   if (os === "win32") {
     const appData = process.env.APPDATA || join(home, "AppData", "Roaming");
-    const localAppData = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
     const configDir = join(appData, appName);
-    return {
-      config: configDir,
-      state: join(localAppData, appName),
-      cache: join(localAppData, appName, "cache"),
-      home: configDir,
-      audit: join(configDir, "audit"),
-      sessions: join(configDir, "sessions"),
-      tmp: join(localAppData, appName, "tmp"),
-      profiles: join(localAppData, appName, "profiles"),
-    };
+    return buildPaths(configDir);
   }
 
-  // macOS / Linux / WSL / other Unix: XDG
+  // Linux / macOS / Unix: Consolidate under XDG_CONFIG_HOME or ~/.config/<appName>
   const xdgConfig = process.env.XDG_CONFIG_HOME || join(home, ".config");
-  const xdgState = process.env.XDG_STATE_HOME || join(home, ".local", "state");
-  const xdgCache = process.env.XDG_CACHE_HOME || join(home, ".cache");
   const configDir = join(xdgConfig, appName);
-
-  return {
-    config: configDir,
-    state: join(xdgState, appName),
-    cache: join(xdgCache, appName),
-    home: configDir,
-    audit: join(xdgState, appName, "audit"),
-    sessions: join(configDir, "sessions"),
-    tmp: join(xdgCache, appName, "tmp"),
-    profiles: join(xdgState, appName, "profiles"),
-  };
+  return buildPaths(configDir);
 }
 
 /**
  * Creates all directories in the AppPaths tree. Idempotent.
- * Permissions: 0o700 for sensitive dirs (sessions), 0o755 for the rest.
+ * Permissions: 0o700 for sensitive dirs (sessions, profiles), 0o755 for config.
  */
 export function ensureHome(paths: AppPaths): void {
-  for (const dir of [paths.config, paths.state, paths.cache, paths.audit, paths.tmp, paths.profiles]) {
-    mkdirSync(dir, { recursive: true, mode: 0o755 });
-  }
+  mkdirSync(paths.config, { recursive: true, mode: 0o755 });
+  mkdirSync(paths.profiles, { recursive: true, mode: 0o700 });
   mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
 }
 

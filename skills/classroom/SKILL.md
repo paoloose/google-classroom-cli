@@ -102,6 +102,14 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
 - `classroom guardian invite <student_id> --email="<email>"`
   - Send a guardian invitation.
 
+### Developer & Audit Logs
+- `classroom audit list [--limit=<n>] [--status=<success|error>] [--from=<date>] [--last=<duration>]`
+  - List recent command execution logs with timestamps, status, duration, and summary.
+- `classroom audit tail [n]`
+  - Show detailed developer inspection of the last `n` audit entries (flags, args, errors, stack traces).
+- `classroom audit clear`
+  - Clear the audit log history (`~/.config/classroom-cli/audit/audit.jsonl`).
+
 ## Course Context & URL / Base64 Reference Resolution
 
 - **Active Course Context:** Most course-scoped commands accept the course id positionally, but if you omit it (or pass only the trailing resource id for `* get` / `submissions list` / `submit` / `turn-in` / `unsubmit` / `comment *`), the CLI falls back to the **active course context**. Pin one with `course select <id>` (or interactively with `course select`), clear with `course deselect`, and inspect with `course current`.

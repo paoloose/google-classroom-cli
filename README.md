@@ -4,104 +4,24 @@ A powerful, agent-first CLI for interacting with Google Classroom from your term
 
 ## Installation
 
-### npm (recommended)
-
 ```bash
 npm install -g @paoloose/google-classroom-cli
 ```
 
-That's it. npm automatically downloads only the prebuilt binary for your platform (Linux, macOS, or Windows). No Bun or Node runtime required beyond npm itself. The `classroom` command will be on your `PATH` immediately.
+Supported platforms: Linux, macOS, Windows.
 
-Supported platforms:
-
-| OS       | Architecture |   |
-| -------- | ------------ | - |
-| Linux    | x64, arm64   | ✓ |
-| macOS    | x64, arm64   | ✓ |
-| Windows  | x64          | ✓ |
-
-To update:
-
-```bash
-npm update -g @paoloose/google-classroom-cli
-```
-
-### One-line installer (alternative)
-
-A bash installer also ships with every release. It pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
-
-macOS / Linux / WSL / Git Bash:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
-```
-
-Windows (PowerShell 7+):
-
-```powershell
-iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.ps1 | iex
-```
-
-By default the CLI lives under `~/.config/classroom-cli/` (XDG on Unix, `%LOCALAPPDATA%\classroom-cli` on Windows) so credentials and state survive every upgrade. Override with `--install-dir <path>` or `CLASSROOM_CLI_HOME`.
-
-Useful flags (same on both platforms):
-
-| Flag / option                                 | Effect                                                   |
-| --------------------------------------------- | -------------------------------------------------------- |
-| `--version vX.Y.Z` / `-Version vX.Y.Z`        | Pin to a specific tag instead of "latest"                |
-| `--prerelease` / `-Prerelease`                | Include `-beta` / `-rc` releases when resolving "latest" |
-| `--channel beta` / `-Channel beta`            | Same as `--prerelease` but friendlier                    |
-| `--force` / `-Force`                          | Re-download even if the installed version is the same    |
-| `--install-dir <path>` / `-InstallDir <path>` | Override the install root                                |
-| `--dry-run` / `-DryRun`                       | Print what would happen, don't touch disk                |
-
-Examples:
-
-```bash
-# Pin a specific version
-curl -fsSL .../install.sh | bash -s -- --version v0.0.1
-
-# Install a pre-release build
-curl -fsSL .../install.sh | bash -s -- --prerelease
-
-# Install into a custom directory
-curl -fsSL .../install.sh | bash -s -- --install-dir /opt/classroom-cli
-```
-
-### Update an existing install
-
-The installer detects your currently installed version (via `$CLASSROOM_CLI_HOME/repo/.classroom-cli-version`) and only fetches a new tarball when the resolved one is newer. So re-running the same one-liner acts as an update:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
-```
-
-Add `--force` to reinstall the same version, or `--version v0.0.1` to roll back. The `sessions/` directory is preserved across every install, so `classroom auth login` only has to run once.
-
-### From a local clone (development)
-
-If you have the repository cloned, link it globally with bun:
-
-```bash
-bun link
-```
-
-The link approach runs directly from your working tree: no version pinning, no install dir.
+See [Other installation methods](#other-installation-methods).
 
 ## Agent Skills
 
-The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills) (`npx skills`). The skill teaches your agent the full feature surface: every command, every verb, the `--from`/`--last` filtering grammar, the `--full`/`--detailed` verbosity tiers, and the active-course-context resolver.
-
-### Install skills from GitHub (no clone required)
+The repository ships a `classroom` skill under `skills/classroom/` that any compatible agent can install via the [open agent skills CLI](https://github.com/vercel-labs/skills).
 
 ```bash
-# Install the latest from the public repo
+# Install the latest skill from the public repo
 npx skills add paoloose/google-classroom-cli --skill classroom
 ```
 
-### Install from a local clone
-
-If you've already cloned the repo:
+Or if you've already cloned the repo:
 
 ```bash
 # Install into whichever agents are detected
@@ -117,13 +37,13 @@ Because this CLI interacts with Google Classroom, you need to provide your own G
 ### How to get your Client ID and Client Secret (Updated 2026)
 
 1. **Create a Project:**
-   Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
+   Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project (if you don't have one).
 
 2. **Enable the API:**
    In the search bar at the top, search for **"Google Classroom API"** and click **Enable**.
 
 3. **Navigate to the OAuth Consent Screen:**
-   In the left navigation menu, go to **APIs & Services > OAuth Consent Screen**. (Google recently redesigned this from the old "OAuth consent screen" menus).
+   In the left navigation menu, go to **APIs & Services > OAuth Consent Screen**.
 
 4. **Configure Branding:**
    - Click **Branding** in the left sidebar.
@@ -139,6 +59,7 @@ Because this CLI interacts with Google Classroom, you need to provide your own G
    - Click **Create Client**.
    - For **Application type**, select **Desktop app**.
    - Give it a name (e.g., "Classroom CLI") and click **Create**.
+   - Copy the client ID and generate a client secret.
 
 7. **Log In:**
    Run the login command:
@@ -211,6 +132,12 @@ You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the us
 - `classroom pending` - Global aggregator: get all your missing/active work across all active courses
 - `classroom due-soon` - View all assignments due in the next 7 days
 
+### Developer & Audit Logs
+
+- `classroom audit list [--limit=<n>] [--status=<success|error>] [--from=<date>] [--last=<duration>]` - List recent command execution audit records
+- `classroom audit tail [n]` - Detailed developer view of recent executions with flags, args, and duration
+- `classroom audit clear` - Clear audit log file history (`~/.config/classroom-cli/audit/audit.jsonl`)
+
 This CLI is designed to be easily consumed by AI agents. It detects when it is running in a non-interactive environment (like CI or an agent subprocess) and will automatically emit structured NDJSON instead of human-readable text. You can also force this mode by passing the `--json` flag.
 
 ## 🔗 Direct Link & Base64 URL Reference Support
@@ -233,8 +160,8 @@ classroom work list https://classroom.google.com/c/ODc2NDQxOTM5MDY2
 classroom work get https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
 
 # Submit work, turn in, or comment using the assignment URL:
-classroom submit https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --file="informe.pdf" --turn-in
-classroom comment post https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --text="Listo profesor"
+classroom submit https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --file="homework.pdf" --turn-in
+classroom comment post https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --text="Hey professor!"
 classroom comment list https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
 ```
 
@@ -396,3 +323,104 @@ While the student workflow is 100% complete and fully resilient against the `@Pr
    - **Full Invite Link (Recommended):** If you pass the full invite link (e.g. `classroom enroll "https://classroom.google.com/c/ODc2NDQxOTM5MDY2?cjc=abc123x"`), the CLI automatically parses and base64-decodes both the Course ID and the join code.
    - **Active Context:** If you already selected a course (`classroom course select <id>`), you only need to provide the code: `classroom enroll <code>`.
    - **Raw Code Only:** If you only have the 7-character code and do not know the numeric Course ID, you should join the class once via the [Classroom Web UI](https://classroom.google.com).
+
+## Other installation methods
+
+### One-line installer
+
+A bash installer also ships with every release. It pulls the latest stable version for your OS/arch, drops the code under `$CLASSROOM_CLI_HOME/repo/`, and exposes a `classroom` symlink in `$CLASSROOM_CLI_HOME/bin/`.
+
+macOS / Linux / WSL / Git Bash:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
+```
+
+Windows (PowerShell 7+):
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.ps1 | iex
+```
+
+| OS      | Architecture                 |
+| ------- | ---------------------------- |
+| Linux   | ~/.config/classroom-cli/     |
+| macOS   | %LOCALAPPDATA%\classroom-cli |
+| Windows | %LOCALAPPDATA%\classroom-cli |
+
+Override with `--install-dir <path>` or `CLASSROOM_CLI_HOME`.
+
+Useful flags (same on both platforms):
+
+| Flag / option                                 | Effect                                                   |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `--version vX.Y.Z` / `-Version vX.Y.Z`        | Pin to a specific tag instead of "latest"                |
+| `--prerelease` / `-Prerelease`                | Include `-beta` / `-rc` releases when resolving "latest" |
+| `--channel beta` / `-Channel beta`            | Same as `--prerelease` but friendlier                    |
+| `--force` / `-Force`                          | Re-download even if the installed version is the same    |
+| `--install-dir <path>` / `-InstallDir <path>` | Override the install root                                |
+| `--dry-run` / `-DryRun`                       | Print what would happen, don't touch disk                |
+
+Examples:
+
+```bash
+# Pin a specific version
+curl -fsSL .../install.sh | bash -s -- --version v0.0.1
+
+# Install a pre-release build
+curl -fsSL .../install.sh | bash -s -- --prerelease
+
+# Install into a custom directory
+curl -fsSL .../install.sh | bash -s -- --install-dir /opt/classroom-cli
+```
+
+### Update an existing install
+
+The installer detects your currently installed version (via `$CLASSROOM_CLI_HOME/repo/.classroom-cli-version`) and only fetches a new tarball when the resolved one is newer. So re-running the same one-liner acts as an update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.sh | bash
+```
+
+Add `--force` to reinstall the same version, or `--version v0.0.1` to roll back. The `sessions/` directory is preserved across every install, so `classroom auth login` only has to run once.
+
+### From a local clone (development)
+
+If you have the repository cloned, link it globally with bun:
+
+```bash
+bun link
+```
+
+The link approach runs directly from your working tree: no version pinning, no install dir.
+
+## Uninstallation
+
+To remove the Google Classroom CLI:
+
+### If installed via npm:
+
+```bash
+npm uninstall -g @paoloose/google-classroom-cli
+```
+
+### If installed via the One-Line installer:
+
+macOS / Linux / WSL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/uninstall.sh | bash
+```
+
+Windows (PowerShell 7+):
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/uninstall.ps1 | iex
+```
+
+> **Note:** By default, configuration, credentials, and active profiles are preserved. To completely remove all configuration data, pass `--purge` (or `-Purge` on PowerShell):
+> ```bash
+> ./scripts/uninstall.sh --purge
+> ```
+
+

@@ -28,6 +28,8 @@ import {
   shouldColor,
 } from "../platform/detect.js";
 
+import { recordAuditSummary } from "../foundation/audit.js";
+
 // Re-export so consumers can import everything from json-mode
 export { type EmitOptions, type OutputMode as Mode, detectMode, shouldColor };
 
@@ -36,6 +38,7 @@ export { type EmitOptions, type OutputMode as Mode, detectMode, shouldColor };
  * Arrays emit as NDJSON (one object per line) for agent stream-parsing.
  */
 export function emit<T>(value: T, opts: EmitOptions = {}, humanRender?: (value: T) => void): void {
+  recordAuditSummary(value);
   const mode = detectMode(opts);
 
   if (mode === "json") {
