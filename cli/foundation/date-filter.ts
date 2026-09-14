@@ -10,7 +10,7 @@
 //     current month and year.
 //   • When only month + day are present (e.g. "03-15" or "15-03"), the year is
 //     filled with the current year. Ambiguous day-first inputs are rejected.
-//   • A full date is always required — empty input is an error.
+//   • A full date is always required - empty input is an error.
 //
 // Duration input (--last):
 //   • Format: <n>y<n>m<n>d<n>h<n>m<n>s  (e.g. "1y2m3d4h5m6s", "7d", "24h").
@@ -46,7 +46,7 @@ const DURATION_PATTERN = /^(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)m)?(?:(\d+)d)?(?:(\d+)h
  *  - dayjs/date-fns formats like "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss",
  *    "yyyy/MM/dd", "MM/dd/yyyy", "dd-MM-yyyy", "dd MMM yyyy", etc.
  *  - Pure day numbers ("15") → day-15 of current month/year.
- *  - "MM-dd" or "dd-MM" (ambiguous) — we reject and ask the user to use a year.
+ *  - "MM-dd" or "dd-MM" (ambiguous) - we reject and ask the user to use a year.
  */
 export function parseDateInput(input: string, now: Date = new Date()): Date {
   const trimmed = input.trim();
@@ -76,7 +76,7 @@ export function parseDateInput(input: string, now: Date = new Date()): Date {
     return result;
   }
 
-  // Try strict ISO first — accepts "YYYY-MM-DD" and full ISO timestamps.
+  // Try strict ISO first - accepts "YYYY-MM-DD" and full ISO timestamps.
   const isoCandidate = new Date(trimmed);
   if (!isNaN(isoCandidate.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     return isoCandidate;

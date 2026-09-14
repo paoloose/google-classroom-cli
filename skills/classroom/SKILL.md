@@ -119,7 +119,7 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
 
 ## Global Filtering Flags
 
-Every list-style command and aggregator — `course list`, `course get` (related sub-blocks), `work list`, `work get` (related), `material list`, `material get`, `topic list`, `topic get` (related), `stream list`, `stream get`, `submissions list`, `tasks pending`, `tasks due-soon` — accepts two optional date filters:
+Every list-style command and aggregator - `course list`, `course get` (related sub-blocks), `work list`, `work get` (related), `material list`, `material get`, `topic list`, `topic get` (related), `stream list`, `stream get`, `submissions list`, `tasks pending`, `tasks due-soon` - accepts two optional date filters:
 
 ### `--from <date>`
 
@@ -129,7 +129,7 @@ Include only items dated on or after `<date>`. ISO 8601 is preferred and tried f
 - Slash/dotted: `--from 2025/01/31`, `--from 2025.01.31`
 - Human: `--from "Jan 31, 2025"`
 - Bare day: `--from 15` → day-15 of the current month and year
-- Missing year → filled with the current year. **Missing day is an error** — the date must always be unambiguous.
+- Missing year → filled with the current year. **Missing day is an error** - the date must always be unambiguous.
 
 Also honored via the env var `CLI_FROM`.
 
@@ -157,7 +157,7 @@ Also honored via the env var `CLI_LAST`.
 
 ### Combining
 
-- `--from` and `--last` are **mutually exclusive** — passing both is an error.
+- `--from` and `--last` are **mutually exclusive** - passing both is an error.
 - Without either flag, every list command behaves exactly as before.
 - Filtering happens before JSON emission, so `--json` mode honors the filter too.
 
@@ -167,12 +167,12 @@ Also honored via the env var `CLI_LAST`.
 |----------------------------------|---------------------|------------------|
 | `course list` / `course get`     | `updateTime`        | `creationTime`   |
 | `work list` / `work get`         | `dueDate`           | `updateTime`     |
-| `material list` / `material get` | `updateTime`        | —                |
-| `topic list` / `topic get`       | `updateTime`        | —                |
-| `stream list` / `stream get`     | `updateTime`        | —                |
+| `material list` / `material get` | `updateTime`        | -                |
+| `topic list` / `topic get`       | `updateTime`        | -                |
+| `stream list` / `stream get`     | `updateTime`        | -                |
 | `submissions list`               | `updateTime`        | `creationTime`   |
-| `tasks pending`                  | `dueDate`           | —                |
-| `tasks due-soon`                 | `dueDate`           | —                |
+| `tasks pending`                  | `dueDate`           | -                |
+| `tasks due-soon`                 | `dueDate`           | -                |
 
 The same filter is applied to the related sub-blocks (`topics`, `coursework`, `materials`, `stream`) inside `course get` and `topic get`.
 
@@ -224,8 +224,8 @@ NDJSON (one object per line) for arrays, single object otherwise. Errors:
 
 ## API Limitations & Quirks
 
-1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`)** — Google Classroom blocks API clients from modifying submissions (attaching files, turning in) when the assignment was created manually by a teacher in the Web UI or by a different Google Cloud project. The CLI can only submit/turn-in assignments that the CLI itself created. Agents should fall back to the Web UI (or instruct the user) for manual assignment submissions.
-2. **Google Drive API Requirement** — All file attachments live in Google Drive. `--file` uploads and `drive download` need the "Google Drive API" enabled in the user's Google Cloud project, otherwise they 403.
-3. **Course Creation States (`@CourseStateDenied`)** — Courses created via the CLI may default to `PROVISIONED` depending on Workspace domain policy. The API rejects direct `PROVISIONED → ARCHIVED` transitions; the course must be activated in the Web UI first.
-4. **Course Enrollment Requires Course ID (`enroll [id] <code>`)** — In the Classroom Web UI, students join classes by typing only a 7-character code because Google performs a global lookup. In the REST API, the endpoint is course-scoped (`courses.students.create`) and requires both `courseId` and `enrollmentCode`. Pass the full invite link (`https://classroom.google.com/c/...`) to let the CLI extract both automatically, or join via the Web UI if only given the 7-character code.
-5. **Schedule time on stream** — `stream post` accepts an optional `--scheduled` parameter; the value is passed through unchanged, so format it per the Google Classroom API expectation.
+1. **Student Submit & Turn-In Restrictions (`@ProjectPermissionDenied`)** - Google Classroom blocks API clients from modifying submissions (attaching files, turning in) when the assignment was created manually by a teacher in the Web UI or by a different Google Cloud project. The CLI can only submit/turn-in assignments that the CLI itself created. Agents should fall back to the Web UI (or instruct the user) for manual assignment submissions.
+2. **Google Drive API Requirement** - All file attachments live in Google Drive. `--file` uploads and `drive download` need the "Google Drive API" enabled in the user's Google Cloud project, otherwise they 403.
+3. **Course Creation States (`@CourseStateDenied`)** - Courses created via the CLI may default to `PROVISIONED` depending on Workspace domain policy. The API rejects direct `PROVISIONED → ARCHIVED` transitions; the course must be activated in the Web UI first.
+4. **Course Enrollment Requires Course ID (`enroll [id] <code>`)** - In the Classroom Web UI, students join classes by typing only a 7-character code because Google performs a global lookup. In the REST API, the endpoint is course-scoped (`courses.students.create`) and requires both `courseId` and `enrollmentCode`. Pass the full invite link (`https://classroom.google.com/c/...`) to let the CLI extract both automatically, or join via the Web UI if only given the 7-character code.
+5. **Schedule time on stream** - `stream post` accepts an optional `--scheduled` parameter; the value is passed through unchanged, so format it per the Google Classroom API expectation.

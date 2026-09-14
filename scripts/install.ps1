@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #
-# classroom-cli installer / updater (PowerShell — Windows, macOS, Linux).
+# classroom-cli installer / updater (PowerShell - Windows, macOS, Linux).
 #
 # Examples (PowerShell 7+):
 #   iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/install.ps1 | iex
@@ -33,7 +33,7 @@ $AppName  = "classroom-cli"
 $AppBin   = "classroom"
 $BinExt   = if ($IsWindows) { ".exe" } else { "" }
 
-# Allow-list — must mirror scripts/install.sh and the release workflow.
+# Allow-list - must mirror scripts/install.sh and the release workflow.
 $AllowedTargets = @(
   "linux-x64","linux-arm64",
   "darwin-x64","darwin-arm64",

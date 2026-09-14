@@ -652,13 +652,13 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           details: [['State', stateColor]]
         };
 
-        // Default tier — relevant fields visible without opt-ins.
+        // Default tier - relevant fields visible without opt-ins.
         if (m.creationTime) item.details!.push(['Created', m.creationTime]);
         if (m.updateTime) item.details!.push(['Updated', m.updateTime]);
         if (m.alternateLink) item.details!.push(['Link', pc.blue(pc.underline(m.alternateLink))]);
         if (m.description) item.details!.push(['Description', m.description.split('\n')[0] + (m.description.includes('\n') ? '...' : '')]);
 
-        // --full — exhaustive API metadata.
+        // --full - exhaustive API metadata.
         if (isFull) {
           if (m.courseId) item.details!.push(['Course ID', m.courseId]);
           if (m.topicId) item.details!.push(['Topic ID', m.topicId]);

@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 #
-# classroom-cli uninstaller (PowerShell — Windows, macOS, Linux)
+# classroom-cli uninstaller (PowerShell - Windows, macOS, Linux)
 #
 # Usage:
 #   iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/scripts/uninstall.ps1 | iex

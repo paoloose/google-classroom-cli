@@ -189,7 +189,7 @@ resolve_version() {
 strip_v() { printf '%s' "${1#v}"; }
 
 # Compare dotted versions: returns 0 if $1 > $2, 1 if equal, 2 if less.
-# Not a full semver comparator — but enough for our needs.
+# Not a full semver comparator - but enough for our needs.
 version_gt() {
   local IFS=.
   local a=($1) b=($2)

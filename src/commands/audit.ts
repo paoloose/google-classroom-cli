@@ -62,7 +62,7 @@ export async function handleAudit(verb: string | undefined, globals: GlobalFlags
       for (const r of records.reverse()) {
         const isOk = r.status === 'success';
         const symbol = isOk ? pc.green('✓') : pc.red('✗');
-        console.log(`\n${symbol} ${pc.bold(r.id)} — ${pc.cyan(r.timestamp)} (${r.durationMs}ms)`);
+        console.log(`\n${symbol} ${pc.bold(r.id)} - ${pc.cyan(r.timestamp)} (${r.durationMs}ms)`);
         console.log(`  ${pc.dim('Command:')}  ${pc.white(r.command)}`);
         console.log(`  ${pc.dim('Profile:')}  ${r.profile}`);
         console.log(`  ${pc.dim('Status:')}   ${isOk ? pc.green('SUCCESS') : pc.red('ERROR (code: ' + r.exitCode + ')')}`);
