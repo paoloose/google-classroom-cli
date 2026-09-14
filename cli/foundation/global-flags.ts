@@ -44,7 +44,7 @@ export function parseGlobalFlags(raw: Record<string, unknown> = {}): GlobalFlags
     profile: (raw.profile as string) ?? process.env.CLI_PROFILE ?? undefined,
     noInput: Boolean(raw.noInput ?? raw["no-input"] ?? process.env.CI === "true"),
     quiet: Boolean(raw.quiet ?? raw.q ?? false),
-    verbose: Boolean(raw.verbose ?? raw.v ?? false),
+    verbose: Boolean(raw.verbose ?? false),
     from: (raw.from as string) ?? process.env.CLI_FROM ?? undefined,
     last: (raw.last as string) ?? process.env.CLI_LAST ?? undefined,
   };
@@ -66,7 +66,8 @@ export function getGlobalFlagDefs() {
     { flag: "--profile <name>", description: "Config profile to use" },
     { flag: "--no-input", description: "Never prompt, fail fast" },
     { flag: "-q, --quiet", description: "Suppress non-essential output" },
-    { flag: "-v, --verbose", description: "Verbose logging to stderr" },
+    { flag: "--verbose", description: "Verbose logging to stderr" },
+    { flag: "-v, --version", description: "Print CLI version and exit" },
     { flag: "--from <date>", description: "Filter output to items on/after this date (ISO preferred; partial dates fill from current)" },
     { flag: "--last <duration>", description: "Filter output to items within this duration window from now (e.g. 7d, 24h, 1y2m)" },
   ] as const;

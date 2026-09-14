@@ -1,6 +1,8 @@
 # Google Classroom CLI
 
-A powerful, agent-first CLI for interacting with Google Classroom from your terminal. Built with Node.js and TypeScript.
+Fully-featured CLI for interacting with Google Classroom from your terminal.
+
+![Banner](assets/banner.png)
 
 ## Installation
 
@@ -11,6 +13,42 @@ npm install -g @paoloose/google-classroom-cli
 Supported platforms: Linux, macOS, Windows.
 
 See [Other installation methods](#other-installation-methods).
+
+## Quick Start
+
+Once installed, you can start interacting with Google Classroom immediately:
+
+1. **Authenticate your account:**
+
+   ```bash
+   classroom auth login
+   ```
+
+   *(Requires a Google Cloud OAuth Client ID—see [Setup & Authentication](#setup--authentication) if this is your first time).*
+
+2. **List your active courses:**
+
+   ```bash
+   classroom course list
+   ```
+
+3. **Interactively select a course context** so you don't have to keep passing its ID:
+
+   ```bash
+   classroom course select
+   ```
+
+4. **View pending assignments for the pinned course:**
+
+   ```bash
+   classroom work list
+   ```
+
+5. **Get assignment details** (use `--related` to see attachments and your submission status):
+
+   ```bash
+   classroom work get <work_id> --related
+   ```
 
 ## Agent Skills
 
@@ -32,9 +70,22 @@ npx skills add ./skills
 
 ## Setup & Authentication
 
-Because this CLI interacts with Google Classroom, you need to provide your own Google Cloud OAuth credentials. **This is completely free and requires no credit card.**
+Because this CLI interacts with Google Classroom, you need to provide your own Google Cloud OAuth credentials.
 
-### How to get your Client ID and Client Secret (Updated 2026)
+### `classroom auth login`
+
+```bash
+$ classroom auth login
+
+Google Classroom OAuth 2.0 Setup
+You need a Desktop OAuth Client ID from Google Cloud Console.
+Client ID: ❓
+```
+
+> **Note on Drive Permissions:** When authenticating, the CLI requests Google Drive scopes by default. You **must grant these permissions** if you intend to upload local files as attachments to coursework, materials, or submissions.
+
+<details>
+<summary><b>‼️How to get your Client ID and Client Secret</b></summary>
 
 1. **Create a Project:**
    Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project (if you don't have one).
@@ -75,21 +126,37 @@ Because this CLI interacts with Google Classroom, you need to provide your own G
 
    *(Note: You can also just paste the Client ID and Secret when prompted interactively, pass them via `--client-id` and `--client-secret` flags, or set the `CLASSROOM_CLIENT_ID` and `CLASSROOM_CLIENT_SECRET` environment variables).*
 
-### Can I use an Google API key for authentication?
+</details>
 
-**No.** Although you might see the Google Classroom API listed in the API Key restrictions menu in Google Cloud, API Keys are only designed for accessing public, anonymous data (like embedding a Google Map).
+<details>
+<summary><b>Can I use an Google API key for authentication?</b></summary>
 
-Because Google Classroom deals with highly sensitive, private user data, the API requires credentials that "assert a principal" (i.e., it needs to know *who* the human user is). If you attempt to use an API Key, Google will reject the request with the following error:
+**No.** API Keys are only designed for accessing public, anonymous data. If you attempt to use an API Key, Google will reject the request with the following error:
 
 > `API keys are not supported by this API. Expected OAuth2 access token or other authentication credentials that assert a principal.`
 
 You must use an **OAuth 2.0 Client ID and Secret** so that Google can ask the user to explicitly consent to sharing their Classroom data.
+
+</details>
+
+### `classroom auth web-login` (Web Engine)
+
+In addition to the standard OAuth flow, some student actions (like `submit` or `turn-in`) require a secondary authentication step:
+
+```bash
+classroom auth web-login
+```
+
+This launches a persistent, local Google Chrome session where you log in manually. It is required to bypass Google's strict `@ProjectPermissionDenied` sandbox that blocks third-party apps from mutating student submissions.
+
+For full details on why this is necessary and how it works, see [Web Engine Architecture](#web-engine-architecture--projectpermissiondenied-bypasses).
 
 ## Commands
 
 ### Core Auth
 
 - `classroom auth login` - Authenticate (requests all scopes by default)
+- `classroom auth web-login` - Authenticate the Web Engine via a local Chrome session
 - `classroom auth logout` - Clear credentials
 
 ### Courses & Rosters
@@ -142,41 +209,58 @@ This CLI is designed to be easily consumed by AI agents. It detects when it is r
 
 ## 🔗 Direct Link & Base64 URL Reference Support
 
-You can pass full Google Classroom URLs or **Base64-encoded IDs** directly to any command instead of looking up numeric IDs. The CLI automatically extracts and base64-decodes both the **Course ID** and the **Resource ID** (assignment, material, announcement, topic):
+The following is an example of a classroom assignment ("work") link:
+
+![Assignment URL](assets/assignment.png)
+
+As you can see, Classroom base64-encodes its resource URLs, but don't worry!
+You can provide any of the formats, and the CLI will guess the format.
 
 ```bash
 # Pass Base64 IDs directly:
-classroom course get ODc2NDQxOTM5MDY2
-classroom work get ODc2NDQxOTM5MDY2 ODc2NDQwMzA3NTk2
-
-# Get or select a course directly by URL:
-classroom course get https://classroom.google.com/c/ODc2NDQxOTM5MDY2
-classroom course select https://classroom.google.com/c/ODc2NDQxOTM5MDY2
-
-# List assignments or stream for a course:
-classroom work list https://classroom.google.com/c/ODc2NDQxOTM5MDY2
-
-# Get assignment details using its full URL (extracts both courseId and workId):
-classroom work get https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
-
-# Submit work, turn in, or comment using the assignment URL:
-classroom submit https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --file="homework.pdf" --turn-in
-classroom comment post https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details --text="Hey professor!"
-classroom comment list https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details
+classroom course get Nzk2OTUxOTk4MjEx
+classroom work get Nzk2OTUxOTk4MjEx ODcwNTY4MTI1OTAx
 ```
 
-## Verbosity Flags
+You can even use full link!
 
-Most commands accept up to three verbosity tiers:
+```bash
+# Get or select a course directly by URL:
+classroom course get 'https://classroom.google.com/c/Nzk2OTUxOTk4MjEx'
+classroom work get 'https://classroom.google.com/c/Nzk2OTUxOTk4MjEx/a/ODcwNTY4MTI1OTAx/details'
+```
 
-| Tier       | Flag         | Adds                                                                             |
-| ---------- | ------------ | -------------------------------------------------------------------------------- |
-| Default    | *(none)*     | State, Created, Updated, Link, Description (when present)                        |
-| Exhaustive | `--full`     | + Course ID, Topic ID, Creator ID, Scheduled time                                |
-| Detailed   | `--detailed` | + per-attachment type tally (files / links / videos / forms) and Share Mode info |
-|            |              |                                                                                  |
+Other examples:
 
-`--full` and `--detailed` can be combined to get every field at once. Tier differences are most visible in `material list` / `course get`; other commands fall back to a binary default-vs-`--full` model.
+```bash
+# List assignments or stream for a course:
+classroom work list 'https://classroom.google.com/c/ODc2NDQxOTM5MDY2'
+
+# Get assignment details using its full URL (extracts both courseId and workId):
+classroom work get 'https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details'
+
+# Submit work, turn in, or comment using the assignment URL:
+classroom submit 'https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details' --file="homework.pdf" --turn-in
+
+classroom comment post 'https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details' --text="Hey professor!"
+
+classroom comment list 'https://classroom.google.com/c/ODc2NDQxOTM5MDY2/a/ODc2NDQwMzA3NTk2/details'
+```
+
+## Output Modes
+
+Most commands accept various flags to control their output format and verbosity:
+
+| Mode       | Flag              | Description                                                                             |
+| ---------- | ----------------- | --------------------------------------------------------------------------------------- |
+| Default    | *(none)*          | State, Created, Updated, Link, Description (when present)                               |
+| Exhaustive | `--full`          | + Extra fields available in the API, plus per-attachment type tally and Share Mode info |
+| JSON       | `--json`          | Force NDJSON output mode (auto-enabled when stdout is piped)                            |
+| Related    | `--related`       | Fetch related sub-resources (e.g. teachers, topics, coursework). Auto-on under `--json` |
+| Version    | `--version`, `-v` | Print CLI version and exit                                                              |
+|            |                   |                                                                                         |
+
+`--full` can be used to get every field at once. Tier differences are most visible in `material list` / `course get`; other commands fall back to a binary default-vs-`--full` model.
 
 ## Global Filtering Flags
 
@@ -398,13 +482,13 @@ The link approach runs directly from your working tree: no version pinning, no i
 
 To remove the Google Classroom CLI:
 
-### If installed via npm:
+### If installed via npm
 
 ```bash
 npm uninstall -g @paoloose/google-classroom-cli
 ```
 
-### If installed via the One-Line installer:
+### If installed via the One-Line installer
 
 macOS / Linux / WSL:
 
@@ -419,8 +503,7 @@ iwr -useb https://raw.githubusercontent.com/paoloose/google-classroom-cli/main/s
 ```
 
 > **Note:** By default, configuration, credentials, and active profiles are preserved. To completely remove all configuration data, pass `--purge` (or `-Purge` on PowerShell):
+>
 > ```bash
 > ./scripts/uninstall.sh --purge
 > ```
-
-

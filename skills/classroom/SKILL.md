@@ -1,6 +1,6 @@
 ---
 name: classroom
-description: "CLI for Google Classroom. Manage courses, coursework, grades, submissions, announcements, materials, topics, guardians, and student tasks directly from the terminal. Agent-first with structured JSON output, global date filtering (--from/--last), verbosity tiers (--full/--detailed), and a sticky course-context resolver."
+description: "CLI for Google Classroom. Manage courses, coursework, grades, submissions, announcements, materials, topics, guardians, and student tasks directly from the terminal. Agent-first with structured JSON output, global date filtering (--from/--last), verbosity tiers (--full), and a sticky course-context resolver."
 ---
 
 # classroom
@@ -11,8 +11,10 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
 
 ### Core Auth
 - `classroom auth login [--client-id=<id> --client-secret=<secret>]`
-  - OAuth 2.0 Desktop flow. Requests all Google Classroom scopes by default; users deselect unwanted scopes in the OAuth web UI.
+  - OAuth 2.0 Desktop flow. Requests all Google Classroom scopes by default; users deselect unwanted scopes in the OAuth web UI. **Note:** Users must grant the requested Google Drive scopes to upload local files as attachments to materials, coursework, or submissions.
   - Auto-loads `credentials.json` from the standard config dir (`~/.config/classroom-cli/credentials.json` on macOS/Linux, `%APPDATA%\classroom-cli\credentials.json` on Windows).
+- `classroom auth web-login`
+  - Authenticate the Web Engine via a persistent local Chrome session. Required for commands like `submit` or `turn-in` to bypass Google's strict `@ProjectPermissionDenied` sandbox.
 - `classroom auth logout`
   - Clear stored credentials.
 - `classroom schema`
@@ -58,7 +60,7 @@ This CLI is a wrapper around the Google Classroom API. It is **agent-first**: it
 - `classroom topic create [course_id] --name="<name>"`
   - Create a topic.
 - `classroom material list [course_id]`
-  - List materials. **Default view shows State, Created, Updated, Link, and a one-line Description preview.** `--full` adds Course ID, Topic ID, Creator ID, and Scheduled time. `--detailed` adds a per-attachment type tally ("2 files / 1 link / 1 video") and Share Mode info. Combine `--full --detailed` to get every field.
+  - List materials. **Default view shows State, Created, Updated, Link, and a one-line Description preview.** `--full` adds Course ID, Topic ID, Creator ID, Scheduled time, and a per-attachment type tally ("2 files / 1 link / 1 video") and Share Mode info.
 - `classroom material get [course_id] <material_id>`
   - Show full material details with attachments.
 - `classroom material create [course_id] --title="<title>" [--topic=<topic_id>] [--link="<url>"...] [--file="<local_path>"...]`
@@ -192,17 +194,17 @@ Most commands accept up to three verbosity tiers:
 | Tier       | Flag          | Adds                                                         |
 |------------|---------------|--------------------------------------------------------------|
 | Default    | _(none)_      | State, Created, Updated, Link, Description (when present)    |
-| Exhaustive | `--full`      | + Course ID, Topic ID, Creator ID, Scheduled time            |
-| Detailed   | `--detailed`  | + per-attachment type tally (files / links / videos / forms) and Share Mode info |
+| Exhaustive | `--full`      | + Course ID, Topic ID, Creator ID, Scheduled time, per-attachment type tally (files / links / videos / forms) and Share Mode info |
 
-`--full` and `--detailed` can be combined. `material list` is the only command that distinguishes all three tiers today; other commands fall back to a binary default-vs-`--full` model.
+`--full` can be used to get every field at once. `material list` and `course get` show the biggest difference; other commands fall back to a binary default-vs-`--full` model.
 
 ## Other Common Flags
 
 - `--json`: Force JSON output mode (auto-enabled when stdout is piped).
 - `--related`: Fetch related sub-resources (teachers, topics, coursework, materials, announcements, submission). Auto-on under `--json`.
 - `--quiet` / `-q`: Suppress non-essential stderr notes.
-- `--verbose` / `-v`: Verbose stderr logging.
+- `--verbose`: Verbose stderr logging.
+- `--version` / `-v`: Print CLI version and exit.
 - `--dry-run`: Evaluate without mutating upstream state.
 - `--no-input`: Never prompt; fail fast. Useful for agents and CI.
 - `--profile <name>`: Use a named config profile.

@@ -84,7 +84,7 @@ export function getChromeExecutablePath(): string {
 
 export async function performWebLoginHandshake(profile: Profile, globals: GlobalFlags) {
   note(`Starting web login handshake for profile '${profile.name}'...`, globals);
-  
+
   if (!existsSync(profile.paths.browserData)) {
     mkdirSync(profile.paths.browserData, { recursive: true, mode: 0o700 });
   }
@@ -92,8 +92,8 @@ export async function performWebLoginHandshake(profile: Profile, globals: Global
   console.log(pc.yellow('\n⚠️  Google actively blocks automated browsers from logging in.'));
   console.log('To bypass this, we are launching a dedicated, manual Chrome window for this profile.\n');
   console.log(pc.cyan('Step 1:'), 'Log into Google Classroom in the window that just opened.');
-  console.log(pc.cyan('Step 2:'), 'Once you see your Classroom dashboard, fully QUIT Chrome by pressing Cmd+Q (macOS) or closing all windows.');
-  
+  console.log(pc.cyan('Step 2:'), 'Once you see your Classroom dashboard, fully QUIT the Chrome window.');
+
   const chromePath = getChromeExecutablePath();
 
   // Launch Chrome totally detached from agent-browser so webdriver=false
@@ -142,18 +142,18 @@ export async function launchWebEngine(profile: Profile) {
 }
 
 async function executeWebActionFlow(
-  profile: Profile, courseId: string, workId: string, globals: GlobalFlags, 
-  actionName: string, 
-  btnRegexSource: string, 
+  profile: Profile, courseId: string, workId: string, globals: GlobalFlags,
+  actionName: string,
+  btnRegexSource: string,
   alreadyDoneRegexSource: string,
   modalRegexSource: string
 ) {
   note(`Proxying ${actionName} request to headless browser...`, globals);
-  
+
   const base64CourseId = Buffer.from(courseId).toString('base64');
   const base64WorkId = Buffer.from(workId).toString('base64');
   const url = `https://classroom.google.com/c/${base64CourseId}/a/${base64WorkId}/details?hl=en`;
-  
+
   const browser = await launchWebEngine(profile);
 
   try {
@@ -165,14 +165,14 @@ async function executeWebActionFlow(
     const result = await page.evaluate(async (btnStr, doneStr) => {
       const btnRegex = new RegExp(btnStr, 'i');
       const doneRegex = new RegExp(doneStr, 'i');
-      
+
       for (let i = 0; i < 20; i++) {
         const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
-        
+
         if (buttons.some(b => doneRegex.test(b.innerText?.trim() || ''))) {
           return 'ALREADY_DONE';
         }
-        
+
         const btn = buttons.find(b => {
           const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
           return btnRegex.test(b.innerText?.trim() || '') && !isDisabled;
@@ -215,10 +215,10 @@ async function executeWebActionFlow(
     if (!modalClicked) {
       throw new Error('Could not find confirm button in the modal dialog.');
     }
-    
+
     note(`Action complete. Verifying network state...`, globals);
     await new Promise(r => setTimeout(r, 2000));
-    
+
     emit({ success: true, webFallbackUsed: true, method: 'puppeteer' }, globals, () => console.log(pc.green(`\n✔ Action '${actionName}' completed successfully via Web Engine.`)));
   } catch (error: any) {
     throw new AppError('WEB_AUTOMATION_FAILED', {
@@ -379,9 +379,9 @@ export async function executeWebUnsubmit(profile: Profile, courseId: string, wor
 
 export async function executeWebSubmit(profile: Profile, courseId: string, workId: string, links: string[], files: string[], globals: GlobalFlags) {
   note(`Proxying submit request to headless browser...`, globals);
-  
+
   const allLinks = [...links];
-  
+
   if (files.length > 0) {
     const { uploadToDrive } = await import('./commands/drive.js');
     for (const file of files) {
@@ -398,7 +398,7 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
   const base64CourseId = Buffer.from(courseId).toString('base64');
   const base64WorkId = Buffer.from(workId).toString('base64');
   const url = `https://classroom.google.com/c/${base64CourseId}/a/${base64WorkId}/details?hl=en`;
-  
+
   const browser = await launchWebEngine(profile);
 
   try {
@@ -408,7 +408,7 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
 
     for (const link of allLinks) {
       note(`Attaching link to assignment...`, globals);
-      
+
       const addMenuOpened = await page.evaluate(async () => {
         for (let i = 0; i < 20; i++) {
           const buttons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
@@ -424,11 +424,11 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
         }
         return false;
       });
-      
+
       if (!addMenuOpened) throw new Error('Could not find "Add or create" button.');
-      
+
       await new Promise(r => setTimeout(r, 800));
-      
+
       const linkMenuItemClicked = await page.evaluate(() => {
         const items = Array.from(document.querySelectorAll('[role="menuitem"], li, button, div[role="button"], span[role="button"]')) as HTMLElement[];
         const linkItem = items.find(el => /Link|Enlace/i.test(el.innerText?.trim() || ''));
@@ -438,25 +438,25 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
         }
         return false;
       });
-      
+
       if (!linkMenuItemClicked) throw new Error('Could not find "Link" option in the dropdown menu.');
-      
+
       await new Promise(r => setTimeout(r, 1000));
-      
+
       const typedAndAdded = await page.evaluate(async (urlText) => {
         const dialogs = document.querySelectorAll('[role="dialog"], div[aria-modal="true"]');
         const firstDialog = dialogs[0];
         if (!firstDialog) return false;
-        
+
         const input = firstDialog.querySelector('input');
         if (!input) return false;
-        
+
         input.value = urlText;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        
+
         await new Promise(r => setTimeout(r, 500));
-        
+
         const dialogBtns = Array.from(firstDialog.querySelectorAll('button, div[role="button"], span[role="button"], a[role="button"]')) as HTMLElement[];
         const addLinkBtn = dialogBtns.find(b => {
           const isDisabled = b.hasAttribute('disabled') || b.getAttribute('aria-disabled') === 'true' || (b as any).disabled;
@@ -468,9 +468,9 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
         }
         return false;
       }, link);
-      
+
       if (!typedAndAdded) throw new Error('Failed to paste link into the dialog.');
-      
+
       note(`Waiting for Google Classroom to process the attachment...`, globals);
       // Fast poll until dialog disappears
       for (let p = 0; p < 15; p++) {
@@ -479,7 +479,7 @@ export async function executeWebSubmit(profile: Profile, courseId: string, workI
         await new Promise(r => setTimeout(r, 500));
       }
     }
-    
+
     emit({ success: true, webFallbackUsed: true, method: 'puppeteer' }, globals, () => console.log(pc.green(`\n✔ Successfully attached items via Web Engine.`)));
   } catch (error: any) {
     throw new AppError('WEB_AUTOMATION_FAILED', {
@@ -514,7 +514,7 @@ export async function executeWebPostPrivateComment(
     await page.goto(url, { waitUntil: 'networkidle2' });
 
     note(`Locating ${isClassComment ? 'class' : 'private'} comments input...`, globals);
-    
+
     const inputFound = await page.evaluate(async (isClass) => {
       function getCommentsCard(): HTMLElement | null {
         const all = Array.from(document.querySelectorAll('*')) as HTMLElement[];
@@ -580,7 +580,7 @@ export async function executeWebPostPrivateComment(
     await new Promise(r => setTimeout(r, 800));
 
     note(`Typing comment...`, globals);
-    
+
     await page.evaluate((msg) => {
       const active = document.activeElement as HTMLElement;
       if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {

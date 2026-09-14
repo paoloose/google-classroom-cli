@@ -631,7 +631,6 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
     
     const shouldFetchRelated = argv.related || globals.json;
     const isFull = !!argv.full;
-    const isDetailed = !!argv.detailed;
 
     const fileIds = extractDriveFileIds(materials);
     const sizeMap = fileIds.length > 0 ? await fetchDriveFileSizes(fileIds) : new Map<string, string>();
@@ -667,9 +666,9 @@ export async function handleMaterial(verb: string | undefined, globals: GlobalFl
           if (m.scheduledTime) item.details!.push(['Scheduled', m.scheduledTime]);
         }
 
-        // --detailed — per-attachment breakdown beyond the standard
+        // --full also includes per-attachment breakdown beyond the standard
         // attachment summary (counts + per-type tallies).
-        if (isDetailed && Array.isArray(m.materials) && m.materials.length > 0) {
+        if (isFull && Array.isArray(m.materials) && m.materials.length > 0) {
           const files = Array.isArray(m.files) ? m.files : [];
           const driveCount = files.filter((f: any) => f.type === 'driveFile').length;
           const linkCount = files.filter((f: any) => f.type === 'link').length;

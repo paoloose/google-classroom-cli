@@ -6,6 +6,7 @@
       "name": "google-classroom-cli",
       "dependencies": {
         "@clack/prompts": "^1.7.0",
+        "@paoloose/google-classroom-cli": "^1.0.5",
         "agent-browser": "^0.36.0",
         "date-fns": "^4.4.0",
         "googleapis": "^178.0.0",
@@ -78,6 +79,18 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
 
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
+
+    "@paoloose/google-classroom-cli": ["@paoloose/google-classroom-cli@1.0.5", "", { "optionalDependencies": { "@paoloose/google-classroom-cli-darwin-arm64": "1.0.5", "@paoloose/google-classroom-cli-darwin-x64": "1.0.5", "@paoloose/google-classroom-cli-linux-arm64": "1.0.5", "@paoloose/google-classroom-cli-linux-x64": "1.0.5", "@paoloose/google-classroom-cli-windows-x64": "1.0.5" }, "bin": { "classroom": "bin/classroom.js" } }, "sha512-30bcy2kovURSh8zaZms5h5HSaRtB9FyBTVesnfcTfGr7acSWJu3re0CIrXLfrmtKtXoIIMMrtL+2qWzvWqgWVQ=="],
+
+    "@paoloose/google-classroom-cli-darwin-arm64": ["@paoloose/google-classroom-cli-darwin-arm64@1.0.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-+sIXjmTixOp2Y0kD+AjGP/92cq5OQoOkXXkk8gVJSnFt718b76cmWx8Qf5mEllq5l/fbchItNatqEVueo+e8Ew=="],
+
+    "@paoloose/google-classroom-cli-darwin-x64": ["@paoloose/google-classroom-cli-darwin-x64@1.0.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-thyIp812w70pELyYofj46U5CCM1LG8s3nmyu5u8sClGRQ1yxawbdGmhNRJUwLURrFaAohdhgH2VyY7gndcDR0w=="],
+
+    "@paoloose/google-classroom-cli-linux-arm64": ["@paoloose/google-classroom-cli-linux-arm64@1.0.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-OeQTFQHa7Lh7ZJkRG21BhHmUvwGEp9Qzz++l5RtpTlSSVyuD3uXKOsiTglx0hGj8/yWWmYVEnGIjyrKhNXycFw=="],
+
+    "@paoloose/google-classroom-cli-linux-x64": ["@paoloose/google-classroom-cli-linux-x64@1.0.5", "", { "os": "linux", "cpu": "x64" }, "sha512-6oJ6qCFOToxfNEAzzq35NsSWZ8cFEqayi65XVYpxhWNvBbHX+k5Cnir5I3aDu0Nt0C/7ltT23ZjEqsGvEj28hw=="],
+
+    "@paoloose/google-classroom-cli-windows-x64": ["@paoloose/google-classroom-cli-windows-x64@1.0.5", "", { "os": "win32", "cpu": "x64" }, "sha512-Mc6vD92pHx/ajpKdYkZxlHCUw0APwv6OrMzcnRB3pa6PHCVHvFjh3c4upm8YdW/f17s9HHc3dwUMy+fNIyZgTw=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 

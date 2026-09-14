@@ -6,16 +6,26 @@ import { emit, reportError, note } from '../cli/agent/json-mode.js';
 
 import pc from 'picocolors';
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 async function main() {
   const argv = parseArgv(process.argv.slice(2));
   const globals = parseGlobalFlags(argv);
   
+  if (argv.version || argv.v) {
+    const pkg = require('../package.json');
+    console.log(pkg.version);
+    process.exit(0);
+  }
+  
   // Strict flag validation
   const allowedFlags = new Set([
-    'json', 'help', 'h', 'full', 'detailed', 'related', 'from', 'last',
+    'json', 'help', 'h', 'full', 'related', 'from', 'last',
     'name', 'section', 'status', 'email', 'role',
     'text', 't', 'message', 'm', 'content', 'title', 'link', 'file', 'dest', 'score', 'topic',
-    'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn', 'code-only', 'codeOnly', 'class'
+    'code', 'cjc', 'course', 'courseId', 'turn-in', 'turnIn', 'code-only', 'codeOnly', 'class',
+    'version', 'v'
   ]);
   for (const key of Object.keys(argv)) {
     if (key !== '_' && !allowedFlags.has(key)) {
