@@ -7,7 +7,11 @@ Fully-featured CLI for interacting with Google Classroom from your terminal.
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @paoloose/google-classroom-cli
+
+# Using bun
+bun add -g @paoloose/google-classroom-cli
 ```
 
 Supported platforms: Linux, macOS, Windows.
