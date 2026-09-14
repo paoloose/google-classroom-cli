@@ -201,7 +201,7 @@ jobs:
 
   publish-npm:
     name: publish npm (@paoloose/google-classroom-cli)
-    needs: [build, source-tarball]
+    needs: [publish]
     runs-on: ubuntu-latest
     # Skip npm publish for prereleases; the GitHub Release is enough for those.
     # Remove this `if` to publish every tag including betas/rcs.
