@@ -18,37 +18,30 @@ See [Other installation methods](#other-installation-methods).
 
 Once installed, you can start interacting with Google Classroom immediately:
 
-1. **Authenticate your account:**
+```bash
+# 1. Authenticate your account
+classroom auth login
 
-   ```bash
-   classroom auth login
-   ```
+# 2. List your active courses
+classroom course list
 
-   *(Requires a Google Cloud OAuth Client ID—see [Setup & Authentication](#setup--authentication) if this is your first time).*
+# 3. Interactively select a course context so future commands apply to it
+classroom course select
 
-2. **List your active courses:**
+# 4. View pending assignments for the pinned course
+classroom work list
 
-   ```bash
-   classroom course list
-   ```
+# 5. Get assignment details (use --related to see attachments and your submission status)
+classroom work get <work_id> --related
 
-3. **Interactively select a course context** so you don't have to keep passing its ID:
+# 6. Authenticate the Web Engine (required for submitting/turning in)
+classroom auth web-login
 
-   ```bash
-   classroom course select
-   ```
+# 7. Submit your work (opens interactive TUI to pick the assignment and attach files/links)
+classroom submit --file "homework.pdf" --turn-in
+```
 
-4. **View pending assignments for the pinned course:**
-
-   ```bash
-   classroom work list
-   ```
-
-5. **Get assignment details** (use `--related` to see attachments and your submission status):
-
-   ```bash
-   classroom work get <work_id> --related
-   ```
+See [Setup & Authentication](#setup--authentication) if this is your first time using the CLI.
 
 ## Agent Skills
 
